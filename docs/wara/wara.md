@@ -4,6 +4,10 @@
 
 This module contains the functions and classes required for the Well Architected Reliability Review Automation (WARA) project.
 
+## 使用说明（中文）
+
+- [WARA 模块在用户环境的安装与使用（中文）](usage-zh-cn.md)
+
 ## WARA Cmdlets
 
 ### [Start-WARACollector](Start-WARACollector.md)

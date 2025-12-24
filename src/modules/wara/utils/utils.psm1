@@ -44,7 +44,26 @@ function Invoke-WAFQuery {
         [string] $Query = 'resources | project name, type, location, resourceGroup, subscriptionId, id'
     )
 
-    $result = $SubscriptionIds ? (Search-AzGraph -Query $Query -First 1000 -Subscription $SubscriptionIds) : (Search-AzGraph -Query $Query -First 1000 -UseTenantScope) # -first 1000 returns the first 1000 results and subsequently reduces the amount of queries required to get data.
+    function Test-WAFIsAzureChinaCloud {
+        try {
+            $ctx = Get-AzContext -ErrorAction Stop
+            return ($ctx.Environment.Name -eq 'AzureChinaCloud')
+        }
+        catch {
+            return $false
+        }
+    }
+
+    # China cloud compatibility:
+    # AzureChinaCloud blocks/disallows the logical table name 'appserviceresources'.
+    # In China cloud, equivalent data can be queried using the standard 'resources' table.
+    $effectiveQuery = $Query
+    if (Test-WAFIsAzureChinaCloud -and $effectiveQuery -match '(?i)\bappserviceresources\b') {
+        Write-Verbose "AzureChinaCloud detected; rewriting ARG table name: appserviceresources -> resources"
+        $effectiveQuery = [Regex]::Replace($effectiveQuery, '(?i)\bappserviceresources\b', 'resources')
+    }
+
+    $result = $SubscriptionIds ? (Search-AzGraph -Query $effectiveQuery -First 1000 -Subscription $SubscriptionIds -ErrorAction Stop) : (Search-AzGraph -Query $effectiveQuery -First 1000 -UseTenantScope -ErrorAction Stop) # -first 1000 returns the first 1000 results and subsequently reduces the amount of queries required to get data.
 
     # Collection to store all resources
     $allResources = @($result)
@@ -52,7 +71,7 @@ function Invoke-WAFQuery {
     # Loop to paginate through the results using the skip token
     $result = while ($result.SkipToken) {
         # Retrieve the next set of results using the skip token
-        $result = $SubscriptionIds ? (Search-AzGraph -Query $Query -SkipToken $result.SkipToken -Subscription $SubscriptionIds -First 1000) : (Search-AzGraph -Query $Query -SkipToken $result.SkipToken -First 1000 -UseTenantScope)
+        $result = $SubscriptionIds ? (Search-AzGraph -Query $effectiveQuery -SkipToken $result.SkipToken -Subscription $SubscriptionIds -First 1000 -ErrorAction Stop) : (Search-AzGraph -Query $effectiveQuery -SkipToken $result.SkipToken -First 1000 -UseTenantScope -ErrorAction Stop)
         # Add the results to the collection
         Write-Output $result
     }

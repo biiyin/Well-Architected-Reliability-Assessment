@@ -49,6 +49,12 @@ function Get-WAFSupportTicket {
         [string[]] $SubscriptionIds
     )
 
+    $azContext = Get-AzContext
+    if ($null -ne $azContext -and $azContext.Environment.Name -eq 'AzureChinaCloud') {
+        Write-Warning 'Skipping support ticket collection in AzureChinaCloud.'
+        return @()
+    }
+
     $argQuery = @'
 SupportResources
 | where type =~ "Microsoft.Support/supportTickets"

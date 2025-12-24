@@ -21,6 +21,8 @@ Get-WAFSupportTicket [-SubscriptionIds] <String[]> [-ProgressAction <ActionPrefe
 
 The Get-WAFSupportTicket function queries the Azure Resource Graph to retrieve recent service tickets for a specified Azure subscription. It filters the service tickets to include only those that have created in the last three months.
 
+In AzureChinaCloud, this cmdlet currently skips support ticket collection and returns an empty list.
+
 ## EXAMPLES
 
 ### Example 1

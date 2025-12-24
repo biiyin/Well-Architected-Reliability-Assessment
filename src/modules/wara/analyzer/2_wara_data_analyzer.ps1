@@ -225,7 +225,24 @@ function Read-JSONFile {
     Write-Debug ((get-date -Format 'yyyy-MM-dd HH:mm:ss') + ' - Raw ImpactedResources found: ' + $JSONContent.ImpactedResources.Count)
     Write-Debug ((get-date -Format 'yyyy-MM-dd HH:mm:ss') + ' - Raw PlatformIssues found: ' + $JSONContent.Outages.Count)
     Write-Debug ((get-date -Format 'yyyy-MM-dd HH:mm:ss') + ' - Raw SupportTickets found: ' + $JSONContent.SupportTickets.Count)
-    Write-Debug ((get-date -Format 'yyyy-MM-dd HH:mm:ss') + ' - Raw Workload Inventory found: ' + $JSONContent.InScopeResources.Count)
+
+    # Workload Inventory input collection name depends on collector schema.
+    # Current collector outputs: resourceInventory
+    # Older/alternate outputs may use: InScopeResources
+    $workloadInventorySource = $JSONContent.resourceInventory
+    if ($null -eq $workloadInventorySource -and $JSONContent.PSObject.Properties.Name -contains 'InScopeResources') {
+        $workloadInventorySource = $JSONContent.InScopeResources
+    }
+
+    $workloadInventoryCount = @($workloadInventorySource).Count
+    $workloadInventoryWithIdCount = @($workloadInventorySource | Where-Object { -not [string]::IsNullOrEmpty($_.id) }).Count
+
+    Write-Debug ((get-date -Format 'yyyy-MM-dd HH:mm:ss') + ' - Raw Workload Inventory found: ' + $workloadInventoryCount)
+    if ($workloadInventoryCount -eq 0 -or $workloadInventoryWithIdCount -eq 0) {
+        Write-Warning ('WorkloadInventory will be empty because JSON has no resource inventory items with a valid id. ' +
+            'Check collector scope/filters and ensure you are analyzing the correct JSON file. ' +
+            'Expected JSON field: resourceInventory (or legacy InScopeResources).')
+    }
     return $JSONContent
 }
 
@@ -1195,7 +1212,11 @@ Export-WARAAnalysisPlanning -AnalysisPlanningFormatted $AnalysisPlanning -ExcelP
 
 Write-Debug ((get-date -Format 'yyyy-MM-dd HH:mm:ss') + ' - Invoking Function: Initialize-WARAWorkloadInventory')
 # Creating the Array with the Workload Inventory to be added to the Excel file
-$WorkloadInventory = Initialize-WARAWorkloadInventory -InScopeResources $JSONContent.resourceInventory -TenantID $JSONContent.ScriptDetails.TenantId
+$WorkloadInventorySource = $JSONContent.resourceInventory
+if ($null -eq $WorkloadInventorySource -and $JSONContent.PSObject.Properties.Name -contains 'InScopeResources') {
+    $WorkloadInventorySource = $JSONContent.InScopeResources
+}
+$WorkloadInventory = Initialize-WARAWorkloadInventory -InScopeResources $WorkloadInventorySource -TenantID $JSONContent.ScriptDetails.TenantId
 
 Write-Host $WorkloadInventorySheetRef -NoNewline -ForegroundColor Green
 Write-Host ': ' -NoNewline

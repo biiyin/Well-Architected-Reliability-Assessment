@@ -1,0 +1,4 @@
+dist/
+output/
+configfile
+Build-WARACustomZip.ps1

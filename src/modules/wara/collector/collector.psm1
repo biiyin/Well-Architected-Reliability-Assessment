@@ -196,7 +196,23 @@ function Invoke-WAFQueryLoop {
             (Invoke-WAFQuery -Query $recommendation.query -SubscriptionIds $subscriptionIds -ErrorAction Stop)
         }
         catch {
-            Write-Error "Error running query for - $($recommendation.recommendationResourceType) - $($recommendation.aprlGuid)"
+            $err = $_
+            $msg = $err.Exception.Message
+            if ($err.Exception.InnerException -and $err.Exception.InnerException.Message) {
+                $msg = "$msg | Inner: $($err.Exception.InnerException.Message)"
+            }
+
+            if ($err.ErrorDetails -and $err.ErrorDetails.Message) {
+                $msg = "$msg | Details: $($err.ErrorDetails.Message)"
+            }
+
+            $queryPreview = $recommendation.query
+            if ($queryPreview -and $queryPreview.Length -gt 200) {
+                $queryPreview = $queryPreview.Substring(0, 200) + '...'
+            }
+
+            Write-Error ("Error running query for - {0} - {1}. {2}" -f $recommendation.recommendationResourceType, $recommendation.aprlGuid, $msg)
+            Write-Verbose ("Query (preview): {0}" -f $queryPreview)
         }
     }
     Write-Progress -Activity 'Running Queries' -Status 'Completed' -Completed -Id $ProgressId

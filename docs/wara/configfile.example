@@ -1,11 +1,13 @@
 [tenantId]
-tenantid
+<tenant-guid>
 
 [subscriptionIds]
-/subscriptions/<subid>
+/subscriptions/<subId1>
+/subscriptions/<subId2>
 
 [resourcegroups]
 /subscriptions/<subid>/resourceGroups/Demo1-RG
+/subscriptions/<subid>/resourceGroups/Demo2-RG
 
 [tags]
 env=~prod
