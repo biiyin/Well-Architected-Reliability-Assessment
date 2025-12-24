@@ -26,6 +26,51 @@ Install-Module -Name Az.ResourceGraph -Scope CurrentUser
 > - 本文重点覆盖“数据收集（Start-WARACollector）”。
 > - `Start-WARAReport` 通常需要在 Windows 且本机安装 Office（Excel/PowerPoint）后才能生成报告；Collector/Analyzer 可在支持 PowerShell 的平台运行（以仓库 README 为准）。
 
+## 额外：资源连接拓扑（Toplogy）信息采集与 Excel 输出
+
+如果你希望更好地理解“资源之间如何通过网络/Private Link 连接”，仅靠基础的 `resourceInventory`（id/name/type/location…）通常不够。
+定制版 WARA 已支持对 `resourceInventory` 做一次**最佳努力（best-effort）**的拓扑增强：通过 Azure Resource Graph 额外查询网络相关资源并推导“连接关系”，然后把结果写入 Excel 的 WorkloadInventory 表。
+
+### 1) 为了构建拓扑，建议收集哪些信息
+
+下面这些信息是做连接拓扑（静态拓扑）最常用且相对容易从 ARM/ARG 获取的：
+
+- **L3/L4 归属与落网信息**：资源关联的 VNet / Subnet（例如 VM/NIC、Private Endpoint、App Service VNet Integration）。
+- **IP 入口/出口线索**：Private IP、Public IP（及可选 FQDN）。
+- **Private Link 关系**：Private Endpoint -> 目标 PaaS（Private Link Service/资源 id）的关联。
+- **资源间“边（Edge）”**：
+  - VM <-> NIC（通过 NIC 的 `virtualMachine.id` 推导）
+  - Private Endpoint -> Target Resource（通过 `privateLinkServiceConnections[].privateLinkServiceId` 推导）
+
+> 重要限制：这属于“静态拓扑”，不会告诉你真实运行时流量（例如谁在调用谁、端口是否开放、NSG/UDR 实际放行情况）。
+> 如果需要运行时拓扑，通常还需要 Flow Logs、Application Insights/Service Map、Firewall 日志等遥测数据源。
+
+### 2) 这些字段如何体现在 Excel（resourceInventory / WorkloadInventory）
+
+Collector 生成的 JSON 中 `resourceInventory` 仍会被增强出一组以 `topology_` 开头的字段（便于后续程序化处理）。
+但为了避免 Excel 列数过多，Analyzer/Report 在 `2.WorkloadInventory` / `6.WorkloadInventory` 里会把这些拓扑字段**合并到一列**：
+
+- `networkConfig`：一个**压缩 JSON 字符串**，仅包含该资源实际存在的网络/Private Link 相关字段；没有值的字段不会出现。
+
+- `networkConfig`：一个**可读的多行 key=value 字符串**（每个 key 一行），仅包含该资源实际存在的网络/Private Link 相关字段；没有值的字段不会出现。
+
+`networkConfig` 可能包含的键（示例）：
+
+- `vnetIds`、`subnetIds`、`nicIds`
+- `privateIps`
+- `publicIpIds`、`publicIpAddresses`、`publicFqdns`
+- `privateEndpointIds`、`privateEndpointSubnetIds`、`privateEndpointVnetIds`
+- `privateLinkTargetIds`、`connectedResourceIds`
+- `publicNetworkAccess`
+
+示例（仅示意，实际会因资源类型而不同）：
+
+```text
+vnetIds=/subscriptions/.../virtualNetworks/vnet1
+subnetIds=/subscriptions/.../subnets/s1
+privateIps=10.0.0.4
+```
+
 ## 1. 开发者需要提供什么（交付清单）
 
 为了让用户在不依赖 Gallery 的情况下稳定使用你的定制版，建议你交付以下内容：

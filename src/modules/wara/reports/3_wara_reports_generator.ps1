@@ -1152,9 +1152,39 @@ function Export-ExcelWorkloadInventory {
     $WorkloadSheet.Add('plan')
     $WorkloadSheet.Add('zones')
 
+    $WorkloadSheet.Add('networkConfig')
+
     Write-Debug ((get-date -Format 'yyyy-MM-dd HH:mm:ss') + ' - Exporting Workload Inventory to Excel')
     $ExcelWorkloadInventory | ForEach-Object { [PSCustomObject]$_ } | Select-Object $WorkloadSheet |
     Export-Excel -Path $NewAssessmentFindingsFile -WorksheetName '6.WorkloadInventory' -TableName 'WorkloadResources' -TableStyle $TableStyle -Style $Style -StartRow 12
+
+    # Make networkConfig readable (override the Center style applied to the table/range)
+    try {
+        $pkg = Open-ExcelPackage -Path $NewAssessmentFindingsFile
+        $ws = $pkg.Workbook.Worksheets['6.WorkloadInventory']
+        if ($null -ne $ws -and $null -ne $ws.Dimension) {
+            $headerRow = 12
+            $endRow = $ws.Dimension.End.Row
+            $endCol = $ws.Dimension.End.Column
+
+            $networkCol = $null
+            for ($c = 1; $c -le $endCol; $c++) {
+                if ($ws.Cells[$headerRow, $c].Text -eq 'networkConfig') {
+                    $networkCol = $c
+                    break
+                }
+            }
+
+            if ($null -ne $networkCol -and $endRow -ge $headerRow) {
+                $rangeAddress = $ws.Cells[$headerRow, $networkCol, $endRow, $networkCol].Address
+                Set-ExcelRange -Worksheet $ws -Range $rangeAddress -HorizontalAlignment Left -WrapText
+            }
+        }
+        Close-ExcelPackage -ExcelPackage $pkg
+    }
+    catch {
+        Write-Debug ('Failed to apply networkConfig range style in report workbook: {0}' -f $_.Exception.Message)
+    }
 }
 
 function Build-ExcelPivotTable {

@@ -179,6 +179,9 @@ class WorkLoadInvObj {
     [string] $sku
     [string] $plan
     [string] $zones
+
+    # Consolidated, best-effort network topology info (JSON string)
+    [string] $networkConfig
 }
 
 # function validate if the required modules are installed
@@ -1013,6 +1016,46 @@ function Export-WARASupportTicket {
 
 <############################## Workload Inventory #########################################>
 
+function Convert-TopologyToNetworkConfig {
+    param(
+        [Parameter(Mandatory = $true)]
+        $Resource
+    )
+
+    # Only include keys that have values; keep the output readable (one key per line).
+    $lines = New-Object System.Collections.Generic.List[string]
+
+    $pairs = [ordered]@{
+        vnetIds                 = $Resource.topology_vnetIds
+        subnetIds               = $Resource.topology_subnetIds
+        nicIds                  = $Resource.topology_nicIds
+        privateIps              = $Resource.topology_privateIps
+        publicIpIds             = $Resource.topology_publicIpIds
+        publicIpAddresses       = $Resource.topology_publicIpAddresses
+        publicFqdns             = $Resource.topology_publicFqdns
+        privateEndpointIds      = $Resource.topology_privateEndpointIds
+        privateEndpointSubnetIds = $Resource.topology_privateEndpointSubnetIds
+        privateEndpointVnetIds  = $Resource.topology_privateEndpointVnetIds
+        privateLinkTargetIds    = $Resource.topology_privateLinkTargetIds
+        connectedResourceIds    = $Resource.topology_connectedResourceIds
+        publicNetworkAccess     = $Resource.topology_publicNetworkAccess
+    }
+
+    foreach ($k in $pairs.Keys) {
+        $v = [string]$pairs[$k]
+        if (-not [string]::IsNullOrWhiteSpace($v)) {
+            $lines.Add(('{0}={1}' -f $k, $v))
+        }
+    }
+
+    if ($lines.Count -eq 0) {
+        return $null
+    }
+
+    # Excel cells support line breaks; keep it platform-friendly.
+    return ($lines -join [Environment]::NewLine)
+}
+
 function Initialize-WARAWorkloadInventory {
     param (
         $InScopeResources,
@@ -1040,6 +1083,8 @@ function Initialize-WARAWorkloadInventory {
             $ResourceObj.sku = [string]$resource.sku
             $ResourceObj.plan = $resource.plan
             $ResourceObj.zones = [string]$resource.zones
+
+            $ResourceObj.networkConfig = Convert-TopologyToNetworkConfig -Resource $resource
 
             $tmp += $ResourceObj
         }
@@ -1073,9 +1118,37 @@ function Export-WARAWorkloadInventory {
     $InScopeSheet.Add('plan')
     $InScopeSheet.Add('zones')
 
+    $InScopeSheet.Add('networkConfig')
+
     Write-Debug ((get-date -Format 'yyyy-MM-dd HH:mm:ss') + ' - Exporting Workload Inventory to Excel')
     $null = $WorkloadInventoryFormatted | ForEach-Object { [PSCustomObject]$_ } | Select-Object $InScopeSheet |
     Export-Excel -ExcelPackage $excelPackage -WorksheetName $WorkloadInventorySheetRef -TableName 'InScopeResources' -TableStyle $TableStyle -Style $Style -StartRow 12 -PassThru
+
+    # Make networkConfig readable (override the Center style applied to the table/range)
+    try {
+        $ws = $excelPackage.Workbook.Worksheets[$WorkloadInventorySheetRef]
+        if ($null -ne $ws -and $null -ne $ws.Dimension) {
+            $headerRow = 12
+            $endCol = $ws.Dimension.End.Column
+            $endRow = $ws.Dimension.End.Row
+
+            $networkCol = $null
+            for ($c = 1; $c -le $endCol; $c++) {
+                if ($ws.Cells[$headerRow, $c].Text -eq 'networkConfig') {
+                    $networkCol = $c
+                    break
+                }
+            }
+
+            if ($null -ne $networkCol -and $endRow -ge $headerRow) {
+                $rangeAddress = $ws.Cells[$headerRow, $networkCol, $endRow, $networkCol].Address
+                Set-ExcelRange -Worksheet $ws -Range $rangeAddress -HorizontalAlignment Left -WrapText
+            }
+        }
+    }
+    catch {
+        Write-Debug ('Failed to apply networkConfig range style: {0}' -f $_.Exception.Message)
+    }
 }
 
 <############################## Extra Configurations #########################################>

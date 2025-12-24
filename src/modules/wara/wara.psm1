@@ -464,6 +464,16 @@ function Start-WARACollector {
         Write-Debug "Count of tag filtered Advisor Recommendations: $($advisorResourceObj.count)"
     }
 
+    # Enrich Resource Inventory with connectivity/topology data (best-effort)
+    try {
+        Write-Debug 'Enriching Resource Inventory with topology information'
+        Write-Progress -Activity 'WARA Collector' -Status 'Enriching Resource Inventory Topology' -PercentComplete 92 -Id 1
+        $ResourceInventory = Add-WAFResourceTopology -ResourceInventory $ResourceInventory -SubscriptionIds $Scope_ImplicitSubscriptionIds.replace('/subscriptions/', '')
+    }
+    catch {
+        Write-Warning ("ResourceInventory topology enrichment skipped: {0}" -f $_.Exception.Message)
+    }
+
     #Build Specialized Resource Object if Specialized Workloads are selected but not present in the impactedResourceObj.
     #Some of the specialized workloads have queries that run. If this is the case then we need to check if the impactedResourceObj contains these resource types and if not add them to the impactedResourceObj.
     if ($SpecializedWorkloads) {

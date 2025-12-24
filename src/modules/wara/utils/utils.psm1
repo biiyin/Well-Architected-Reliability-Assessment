@@ -82,6 +82,328 @@ function Invoke-WAFQuery {
     return , $allResources
 }
 
+function Add-WAFResourceTopology {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyCollection()]
+        [object[]] $ResourceInventory,
+
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyCollection()]
+        [string[]] $SubscriptionIds
+    )
+
+    if ($null -eq $ResourceInventory -or @($ResourceInventory).Count -eq 0) {
+        return $ResourceInventory
+    }
+
+    $topologyPropertyNames = @(
+        'topology_nicIds',
+        'topology_subnetIds',
+        'topology_vnetIds',
+        'topology_privateIps',
+        'topology_publicIpIds',
+        'topology_publicIpAddresses',
+        'topology_publicFqdns',
+        'topology_privateEndpointIds',
+        'topology_privateEndpointSubnetIds',
+        'topology_privateEndpointVnetIds',
+        'topology_privateLinkTargetIds',
+        'topology_connectedResourceIds',
+        'topology_publicNetworkAccess'
+    )
+
+    function Normalize-StringList {
+        param([object] $Value)
+
+        if ($null -eq $Value) { return @() }
+
+        $arr = @()
+        if ($Value -is [System.Array]) {
+            $arr = @($Value)
+        }
+        else {
+            $arr = @($Value)
+        }
+
+        $arr = $arr | ForEach-Object {
+            if ($null -eq $_) { return $null }
+            $s = [string]$_
+            if ([string]::IsNullOrWhiteSpace($s)) { return $null }
+            if ($s -eq 'null') { return $null }
+            return $s
+        } | Where-Object { $_ }
+
+        return @($arr | Sort-Object -Unique)
+    }
+
+    function Join-StringList {
+        param([object] $Value)
+        $list = Normalize-StringList -Value $Value
+        if (@($list).Count -eq 0) { return $null }
+        return ($list -join ';')
+    }
+
+    $invById = @{}
+    foreach ($r in $ResourceInventory) {
+        if ($null -eq $r -or [string]::IsNullOrWhiteSpace([string]$r.id)) { continue }
+        $rid = ([string]$r.id).ToLowerInvariant()
+        if (-not $invById.ContainsKey($rid)) {
+            $invById[$rid] = $r
+        }
+
+        foreach ($p in $topologyPropertyNames) {
+            if (-not ($r.PSObject.Properties.Name -contains $p)) {
+                $r | Add-Member -MemberType NoteProperty -Name $p -Value $null
+            }
+        }
+    }
+
+    try {
+        Write-Verbose 'Querying Azure Resource Graph for topology enrichment (VNet/Subnet/NIC/PrivateEndpoint/PublicIP/AppService)..'
+
+        # Subnet -> VNet map (+ subnet metadata)
+        $subnetQuery = @"
+resources
+| where type =~ 'microsoft.network/virtualnetworks'
+| mv-expand sn = properties.subnets
+| extend subnetId = tostring(sn.id)
+| extend subnetName = tostring(sn.name)
+| extend subnetPrefix = tostring(sn.properties.addressPrefix)
+| extend nsgId = tostring(sn.properties.networkSecurityGroup.id)
+| extend routeTableId = tostring(sn.properties.routeTable.id)
+| project vnetId = id, vnetName = name, subscriptionId, resourceGroup, location, subnetId, subnetName, subnetPrefix, nsgId, routeTableId
+"@
+        $subnets = Invoke-WAFQuery -Query $subnetQuery -SubscriptionIds $SubscriptionIds
+        $subnetToVnet = @{}
+        foreach ($s in @($subnets)) {
+            if ($null -eq $s) { continue }
+            if ([string]::IsNullOrWhiteSpace([string]$s.subnetId)) { continue }
+            $subnetToVnet[([string]$s.subnetId).ToLowerInvariant()] = [string]$s.vnetId
+        }
+
+        # NICs: map NIC -> subnet/publicIP/privateIP and VM -> NICs
+        $nicQuery = @"
+resources
+| where type =~ 'microsoft.network/networkinterfaces'
+| mv-expand ipconf = properties.ipConfigurations
+| extend subnetId = tostring(ipconf.properties.subnet.id)
+| extend publicIpId = tostring(ipconf.properties.publicIPAddress.id)
+| extend privateIp = tostring(ipconf.properties.privateIPAddress)
+| summarize subnetIds = make_set(subnetId), publicIpIds = make_set(publicIpId), privateIps = make_set(privateIp), vmId = any(tostring(properties.virtualMachine.id)) by id, name, subscriptionId, resourceGroup, location
+"@
+        $nics = Invoke-WAFQuery -Query $nicQuery -SubscriptionIds $SubscriptionIds
+        $nicById = @{}
+        $vmToNicIds = @{}
+        foreach ($n in @($nics)) {
+            if ($null -eq $n -or [string]::IsNullOrWhiteSpace([string]$n.id)) { continue }
+            $nid = ([string]$n.id).ToLowerInvariant()
+            $nicById[$nid] = $n
+
+            if (-not [string]::IsNullOrWhiteSpace([string]$n.vmId)) {
+                $vmid = ([string]$n.vmId).ToLowerInvariant()
+                if (-not $vmToNicIds.ContainsKey($vmid)) { $vmToNicIds[$vmid] = New-Object System.Collections.Generic.List[string] }
+                $vmToNicIds[$vmid].Add([string]$n.id)
+            }
+        }
+
+        # Public IPs: id -> ip/fqdn
+        $pipQuery = @"
+resources
+| where type =~ 'microsoft.network/publicipaddresses'
+| extend ipAddress = tostring(properties.ipAddress)
+| extend fqdn = tostring(properties.dnsSettings.fqdn)
+| project id, name, ipAddress, fqdn, subscriptionId, resourceGroup, location
+"@
+        $pips = Invoke-WAFQuery -Query $pipQuery -SubscriptionIds $SubscriptionIds
+        $pipById = @{}
+        foreach ($p in @($pips)) {
+            if ($null -eq $p -or [string]::IsNullOrWhiteSpace([string]$p.id)) { continue }
+            $pipById[([string]$p.id).ToLowerInvariant()] = $p
+        }
+
+        # Private Endpoints: PE -> subnet + targets, and reverse target -> PEs
+        $peQuery = @"
+resources
+| where type =~ 'microsoft.network/privateendpoints'
+| mv-expand conn = properties.privateLinkServiceConnections
+| extend targetId = tostring(conn.properties.privateLinkServiceId)
+| extend subnetId = tostring(properties.subnet.id)
+| summarize targetIds = make_set(targetId), subnetIds = make_set(subnetId) by id, name, subscriptionId, resourceGroup, location
+"@
+        $pes = Invoke-WAFQuery -Query $peQuery -SubscriptionIds $SubscriptionIds
+        $peById = @{}
+        $targetToPeIds = @{}
+        foreach ($pe in @($pes)) {
+            if ($null -eq $pe -or [string]::IsNullOrWhiteSpace([string]$pe.id)) { continue }
+            $peid = ([string]$pe.id).ToLowerInvariant()
+            $peById[$peid] = $pe
+            foreach ($t in (Normalize-StringList -Value $pe.targetIds)) {
+                $tid = $t.ToLowerInvariant()
+                if (-not $targetToPeIds.ContainsKey($tid)) { $targetToPeIds[$tid] = New-Object System.Collections.Generic.List[string] }
+                $targetToPeIds[$tid].Add([string]$pe.id)
+            }
+        }
+
+        # App Services: VNet integration subnet + publicNetworkAccess
+        $appQuery = @"
+resources
+| where type =~ 'microsoft.web/sites'
+| extend vnetSubnetId = tostring(properties.virtualNetworkSubnetId)
+| extend publicNetworkAccess = tostring(properties.publicNetworkAccess)
+| project id, name, subscriptionId, resourceGroup, location, vnetSubnetId, publicNetworkAccess
+"@
+        $apps = Invoke-WAFQuery -Query $appQuery -SubscriptionIds $SubscriptionIds
+        $appById = @{}
+        foreach ($a in @($apps)) {
+            if ($null -eq $a -or [string]::IsNullOrWhiteSpace([string]$a.id)) { continue }
+            $appById[([string]$a.id).ToLowerInvariant()] = $a
+        }
+
+        foreach ($r in $ResourceInventory) {
+            if ($null -eq $r -or [string]::IsNullOrWhiteSpace([string]$r.id)) { continue }
+            $rid = ([string]$r.id).ToLowerInvariant()
+            $rtype = [string]$r.type
+
+            # If resource is an App Service
+            if ($appById.ContainsKey($rid)) {
+                $a = $appById[$rid]
+                $r.topology_publicNetworkAccess = if ([string]::IsNullOrWhiteSpace([string]$a.publicNetworkAccess)) { $null } else { [string]$a.publicNetworkAccess }
+                if (-not [string]::IsNullOrWhiteSpace([string]$a.vnetSubnetId)) {
+                    $r.topology_subnetIds = Join-StringList -Value @([string]$a.vnetSubnetId)
+                    $vnetId = $subnetToVnet[([string]$a.vnetSubnetId).ToLowerInvariant()]
+                    if (-not [string]::IsNullOrWhiteSpace($vnetId)) {
+                        $r.topology_vnetIds = Join-StringList -Value @($vnetId)
+                    }
+                }
+            }
+
+            # If resource is a NIC
+            if ($rtype -ieq 'microsoft.network/networkinterfaces' -and $nicById.ContainsKey($rid)) {
+                $n = $nicById[$rid]
+                $subnetIds = Normalize-StringList -Value $n.subnetIds
+                $publicIpIds = Normalize-StringList -Value $n.publicIpIds
+                $privateIps = Normalize-StringList -Value $n.privateIps
+
+                $r.topology_subnetIds = Join-StringList -Value $subnetIds
+                $r.topology_privateIps = Join-StringList -Value $privateIps
+                $r.topology_publicIpIds = Join-StringList -Value $publicIpIds
+
+                $vnetIds = @()
+                foreach ($sid in $subnetIds) {
+                    $v = $subnetToVnet[$sid.ToLowerInvariant()]
+                    if (-not [string]::IsNullOrWhiteSpace($v)) { $vnetIds += $v }
+                }
+                $r.topology_vnetIds = Join-StringList -Value $vnetIds
+
+                $pipAddresses = @()
+                $pipFqdns = @()
+                foreach ($pid in $publicIpIds) {
+                    $p = $pipById[$pid.ToLowerInvariant()]
+                    if ($null -ne $p) {
+                        if (-not [string]::IsNullOrWhiteSpace([string]$p.ipAddress)) { $pipAddresses += [string]$p.ipAddress }
+                        if (-not [string]::IsNullOrWhiteSpace([string]$p.fqdn)) { $pipFqdns += [string]$p.fqdn }
+                    }
+                }
+                $r.topology_publicIpAddresses = Join-StringList -Value $pipAddresses
+                $r.topology_publicFqdns = Join-StringList -Value $pipFqdns
+
+                if (-not [string]::IsNullOrWhiteSpace([string]$n.vmId)) {
+                    $r.topology_connectedResourceIds = Join-StringList -Value @([string]$n.vmId)
+                }
+            }
+
+            # If resource is a VM, derive networking via NICs
+            if ($rtype -ieq 'microsoft.compute/virtualmachines' -and $vmToNicIds.ContainsKey($rid)) {
+                $nicIds = Normalize-StringList -Value $vmToNicIds[$rid]
+                $r.topology_nicIds = Join-StringList -Value $nicIds
+
+                $subnetIds = @()
+                $publicIpIds = @()
+                $privateIps = @()
+                foreach ($nid in $nicIds) {
+                    $n = $nicById[$nid.ToLowerInvariant()]
+                    if ($null -eq $n) { continue }
+                    $subnetIds += Normalize-StringList -Value $n.subnetIds
+                    $publicIpIds += Normalize-StringList -Value $n.publicIpIds
+                    $privateIps += Normalize-StringList -Value $n.privateIps
+                }
+
+                $r.topology_subnetIds = Join-StringList -Value $subnetIds
+                $r.topology_privateIps = Join-StringList -Value $privateIps
+                $r.topology_publicIpIds = Join-StringList -Value $publicIpIds
+
+                $vnetIds = @()
+                foreach ($sid in (Normalize-StringList -Value $subnetIds)) {
+                    $v = $subnetToVnet[$sid.ToLowerInvariant()]
+                    if (-not [string]::IsNullOrWhiteSpace($v)) { $vnetIds += $v }
+                }
+                $r.topology_vnetIds = Join-StringList -Value $vnetIds
+
+                $pipAddresses = @()
+                $pipFqdns = @()
+                foreach ($pid in (Normalize-StringList -Value $publicIpIds)) {
+                    $p = $pipById[$pid.ToLowerInvariant()]
+                    if ($null -ne $p) {
+                        if (-not [string]::IsNullOrWhiteSpace([string]$p.ipAddress)) { $pipAddresses += [string]$p.ipAddress }
+                        if (-not [string]::IsNullOrWhiteSpace([string]$p.fqdn)) { $pipFqdns += [string]$p.fqdn }
+                    }
+                }
+                $r.topology_publicIpAddresses = Join-StringList -Value $pipAddresses
+                $r.topology_publicFqdns = Join-StringList -Value $pipFqdns
+            }
+
+            # If resource is a Private Endpoint
+            if ($rtype -ieq 'microsoft.network/privateendpoints' -and $peById.ContainsKey($rid)) {
+                $pe = $peById[$rid]
+                $peSubnetIds = Normalize-StringList -Value $pe.subnetIds
+                $peTargetIds = Normalize-StringList -Value $pe.targetIds
+
+                $r.topology_subnetIds = Join-StringList -Value $peSubnetIds
+                $r.topology_privateLinkTargetIds = Join-StringList -Value $peTargetIds
+                $r.topology_connectedResourceIds = Join-StringList -Value $peTargetIds
+
+                $peVnetIds = @()
+                foreach ($sid in $peSubnetIds) {
+                    $v = $subnetToVnet[$sid.ToLowerInvariant()]
+                    if (-not [string]::IsNullOrWhiteSpace($v)) { $peVnetIds += $v }
+                }
+                $r.topology_vnetIds = Join-StringList -Value $peVnetIds
+            }
+
+            # If resource is a Private Link target (reverse mapping)
+            if ($targetToPeIds.ContainsKey($rid)) {
+                $peIds = Normalize-StringList -Value $targetToPeIds[$rid]
+                $r.topology_privateEndpointIds = Join-StringList -Value $peIds
+
+                $peSubnetIds = @()
+                $peVnetIds = @()
+                foreach ($pid in $peIds) {
+                    $pe = $peById[$pid.ToLowerInvariant()]
+                    if ($null -eq $pe) { continue }
+                    $peSubnetIds += Normalize-StringList -Value $pe.subnetIds
+                }
+                foreach ($sid in (Normalize-StringList -Value $peSubnetIds)) {
+                    $v = $subnetToVnet[$sid.ToLowerInvariant()]
+                    if (-not [string]::IsNullOrWhiteSpace($v)) { $peVnetIds += $v }
+                }
+                $r.topology_privateEndpointSubnetIds = Join-StringList -Value $peSubnetIds
+                $r.topology_privateEndpointVnetIds = Join-StringList -Value $peVnetIds
+            }
+        }
+    }
+    catch {
+        $msg = $_.Exception.Message
+        if ($_.Exception.InnerException -and $_.Exception.InnerException.Message) {
+            $msg = "$msg | Inner: $($_.Exception.InnerException.Message)"
+        }
+        Write-Warning ("Topology enrichment skipped due to error: {0}" -f $msg)
+    }
+
+    return $ResourceInventory
+}
+
 <#
 .SYNOPSIS
     Invokes an Azure REST API then returns the response.
