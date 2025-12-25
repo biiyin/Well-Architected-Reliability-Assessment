@@ -111,6 +111,54 @@ function Get-CurrentUserModuleRoot() {
     return $preferred
 }
 
+function Ensure-AzureLogin {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [ValidateSet('AzureCloud', 'AzureChinaCloud', 'AzureUSGovernment', 'AzureGermanCloud')]
+        [string] $AzureEnvironment,
+
+        [Parameter(Mandatory = $false)]
+        [string] $TenantId
+    )
+
+    $ctx = $null
+    try {
+        $ctx = Get-AzContext -ErrorAction Stop
+    }
+    catch {
+        $ctx = $null
+    }
+
+    $needsLogin = $false
+    if (-not $ctx) {
+        $needsLogin = $true
+    }
+    elseif ($ctx.Environment -and $ctx.Environment.Name -and ($ctx.Environment.Name -ne $AzureEnvironment)) {
+        $needsLogin = $true
+    }
+    elseif ($TenantId -and $ctx.Tenant -and $ctx.Tenant.Id -and ([string]$ctx.Tenant.Id -ne [string]$TenantId)) {
+        $needsLogin = $true
+    }
+
+    if (-not $needsLogin) {
+        Write-Host "Azure context OK: Tenant=$($ctx.Tenant.Id) Environment=$($ctx.Environment.Name)" -ForegroundColor DarkGray
+        return
+    }
+
+    $connectParams = @{
+        WarningAction = 'SilentlyContinue'
+        ErrorAction   = 'Stop'
+        Environment   = $AzureEnvironment
+    }
+    if ($TenantId) {
+        $connectParams.Tenant = $TenantId
+    }
+
+    Write-Host "Connecting to Azure (Environment=$AzureEnvironment${(if ($TenantId) { ", Tenant=$TenantId" } else { '' })})..." -ForegroundColor Yellow
+    Connect-AzAccount @connectParams | Out-Null
+}
+
 Write-Section "Pre-flight"
 if ($PSVersionTable.PSVersion -lt [version]'7.4') {
     throw "PowerShell 7.4+ is required. Current: $($PSVersionTable.PSVersion)"
@@ -206,6 +254,25 @@ foreach ($cmd in $requiredCommands) {
         throw "Expected command [$cmd] not found after Import-Module."
     }
 }
+
+Write-Section "Azure Login"
+# Ensure we authenticate against the requested Azure cloud. If the custom module zip ignores -AzureEnvironment
+# internally, pre-auth here prevents defaulting to AzureCloud (Azure global).
+$tenantIdFromConfig = $null
+try {
+    if (Get-Command Import-WAFConfigFileData -ErrorAction SilentlyContinue) {
+        $cfg = Import-WAFConfigFileData $ConfigFile
+        if ($cfg) {
+            $tenantIdFromConfig = $cfg.tenantid
+            if (-not $tenantIdFromConfig) { $tenantIdFromConfig = $cfg.TenantId }
+        }
+    }
+}
+catch {
+    # Non-fatal; we'll connect without explicit tenant.
+}
+
+Ensure-AzureLogin -AzureEnvironment $AzureEnvironment -TenantId $tenantIdFromConfig
 
 Write-Section "Run Collector (from config file)"
 New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null

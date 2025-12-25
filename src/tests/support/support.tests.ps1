@@ -14,6 +14,9 @@ Describe 'Get-WAFSupportTicket' {
             $testDataFilePath = "$PSScriptRoot/../data/support/argQuerySingleResultData.json"
             $testData = Get-Content $testDataFilePath -Raw | ConvertFrom-Json -Depth 5
 
+            # Make test deterministic across developer environments (avoid AzureChinaCloud skip).
+            Mock Get-AzContext { $null } -ModuleName $moduleNameToInjectMock
+
             Mock Invoke-WAFQuery {
                 return $testData
             } -ModuleName $moduleNameToInjectMock -Verifiable
@@ -46,6 +49,9 @@ Describe 'Get-WAFSupportTicket' {
         It 'Should return multiple SupportTicketObjects' {
             $testDataFilePath = "$PSScriptRoot/../data/support/argQueryMultipleResultData.json"
             $testDataArray = Get-Content $testDataFilePath -Raw | ConvertFrom-Json -Depth 5
+
+            # Make test deterministic across developer environments (avoid AzureChinaCloud skip).
+            Mock Get-AzContext { $null } -ModuleName $moduleNameToInjectMock
 
             Mock Invoke-WAFQuery {
                 return $testDataArray

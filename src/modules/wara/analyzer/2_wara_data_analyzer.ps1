@@ -270,7 +270,21 @@ function Get-WARARecommendationList {
     )
     Write-Debug ((get-date -Format 'yyyy-MM-dd HH:mm:ss') + ' - Processing Recommendations from JSON file.')
     # Get Recommendation Objects
-    $RecommendationObject = Invoke-RestMethod $RecommendationDataUri
+
+    try {
+        $RecommendationObject = Invoke-RestMethod -Uri $RecommendationDataUri -ErrorAction Stop
+    }
+    catch {
+        $localRecommendationsPath = Join-Path -Path $PSScriptRoot -ChildPath '..\data\recommendations.json'
+
+        if (Test-Path -LiteralPath $localRecommendationsPath -PathType Leaf) {
+            Write-Warning ('Failed to download recommendations from "{0}". Using local copy at "{1}".' -f $RecommendationDataUri, $localRecommendationsPath)
+            $RecommendationObject = Get-Content -Raw -LiteralPath $localRecommendationsPath | ConvertFrom-Json -Depth 50
+        }
+        else {
+            throw
+        }
+    }
 
     return $RecommendationObject
 }
@@ -1218,7 +1232,23 @@ $JSONContent = Read-JSONFile -JSONFile $jsonFilePath
 
 Write-Debug ((get-date -Format 'yyyy-MM-dd HH:mm:ss') + ' - Importing Supported Types')
 # Importing the CSV files to get the supported types and the friendly names for the resource types in the Retirements
-$RootTypes = Invoke-RestMethod $RecommendationResourceTypesUri | ConvertFrom-Csv
+$rootTypesCsv = $null
+try {
+    $rootTypesCsv = Invoke-RestMethod -Uri $RecommendationResourceTypesUri -ErrorAction Stop
+}
+catch {
+    $localResourceTypesPath = Join-Path -Path $PSScriptRoot -ChildPath '..\data\WARAinScopeResTypes.csv'
+
+    if (Test-Path -LiteralPath $localResourceTypesPath -PathType Leaf) {
+        Write-Warning ('Failed to download resource type list from "{0}". Using local copy at "{1}".' -f $RecommendationResourceTypesUri, $localResourceTypesPath)
+        $rootTypesCsv = Get-Content -Raw -LiteralPath $localResourceTypesPath
+    }
+    else {
+        throw
+    }
+}
+
+$RootTypes = $rootTypesCsv | ConvertFrom-Csv
 $RootTypes = $RootTypes | Where-Object { $_.InAprlAndOrAdvisor -eq 'yes' }
 
 Write-Host 'Analysing Excel File Template'

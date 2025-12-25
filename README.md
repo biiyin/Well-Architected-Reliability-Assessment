@@ -74,6 +74,21 @@ Start-WARAReport -ExpertAnalysisFile 'C:\WARA\Expert-Analysis-v1-2025-02-04-11-1
 #You will now have your PowerPoint and Excel reports generated under the C:\WARA directory.
 ```
 
+### Export a deduped network topology (for diagramming)
+
+If your WARA collector output JSON contains `resourceInventory` entries with `topology_*` fields (VNet/Subnet/Public IP/Private Endpoint and Private Link target references), you can generate a simplified topology model that deduplicates resources by **resource type + connected VNet/Subnet**:
+
+```powershell
+pwsh -NoProfile -File .\tools\Export-WARANetworkTopology.ps1 \
+  -InputJson .\output\WARA-File-<timestamp>.json \
+  -OutputJson .\output\WARA-NetworkTopology.json \
+  -OutputMd .\output\WARA-NetworkTopology.md
+```
+
+Outputs:
+- `output/WARA-NetworkTopology.json`: nodes + edges for programmatic diagram generation
+- `output/WARA-NetworkTopology.md`: readable summary with one representative resource per group
+
 ## Requirements
 
 > [!IMPORTANT]

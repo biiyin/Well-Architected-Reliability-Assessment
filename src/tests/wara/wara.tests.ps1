@@ -96,7 +96,12 @@ Describe 'Start-WARACollector' {
 
             Mock Invoke-RestMethod { return $RecommendationObject_TestData } -ParameterFilter { $uri -eq 'https://azure.github.io/WARA-Build/objects/recommendations.json' } -ModuleName 'wara'
 
-            Mock Invoke-RestMethod { return $RecommendationResourceTypes_TestData } -ParameterFilter { $uri -eq 'https://raw.githubusercontent.com/Azure/Azure-Proactive-Resiliency-Library-v2/refs/heads/main/tools/WARAinScopeResTypes.csv' } -ModuleName 'wara'
+            Mock Invoke-RestMethod { return $RecommendationResourceTypes_TestData } -ParameterFilter {
+                $uri -in @(
+                    'https://azure.github.io/WARA-Build/objects/WARAinScopeResTypes.csv',
+                    'https://raw.githubusercontent.com/Azure/Azure-Proactive-Resiliency-Library-v2/refs/heads/main/tools/WARAinScopeResTypes.csv'
+                )
+            } -ModuleName 'wara'
 
             Mock Get-WARAOtherRecommendations { return $null } -ModuleName 'wara'
 
@@ -162,6 +167,106 @@ Describe 'Start-WARACollector' {
             $scriptblock.supporttickets.count | Should -BeExactly 3
 
             #Validate the output of service health
+            $scriptblock.servicehealth.count | Should -BeExactly 9
+        }
+    }
+
+    Context 'When recommendation URIs are unreachable (fallback to local data)' {
+        BeforeAll {
+            $AllResources_TestData = get-content "$PSScriptRoot/../data/wara/test_allresourcesdata.json" -raw | ConvertFrom-Json -depth 20
+            $QueryLoop_TestData = get-content "$PSScriptRoot/../data/wara/test_queryloopdata.json" -raw | ConvertFrom-Json -depth 20
+            $AdvisorMeta_TestData = get-content "$PSScriptRoot/../data/wara/test_advisormetadata.json" -raw | ConvertFrom-Json -depth 20
+            $RecommendationObject_TestData_Raw = get-content "$PSScriptRoot/../data/wara/test_recommendationobjectdata.json" -raw
+            $RecommendationResourceTypes_TestData_Raw = get-content "$PSScriptRoot/../data/wara/test_recommendationresourcetypesdata.csv" -Raw
+            $Advisor_TestData = get-content "$PSScriptRoot/../data/wara/test_advisordata.json" -raw | ConvertFrom-Json -depth 20
+            $TaggedResourceGroup_TestData = @("/subscriptions/22222222-2222-2222-2222-222222222222/resourceGroups/rg-B1")
+            $TaggedResource_TestData = @("/subscriptions/11111111-1111-1111-1111-111111111111/resourceGroups/rg-A1/providers/Microsoft.ApiManagement/service/apiService1")
+            $Outage_TestData = get-content "$PSScriptRoot/../data/outage/restApiMultipleResponseData.json" -raw | ConvertFrom-Json -depth 20 | Select-Object Name, Properties
+            $Retirement_TestData = get-content "$PSScriptRoot/../data/wara/test_retirementdata.json" -raw | ConvertFrom-Json -depth 20
+            $SupportTicket_TestData = get-content "$PSScriptRoot/../data/wara/test_supportticketdata.json" -raw | ConvertFrom-Json -depth 20
+            $ServiceHealth_TestData = get-content "$PSScriptRoot/../data/wara/test_servicehealthdata.json" -raw | ConvertFrom-Json -depth 20
+
+            # Swap the module's local fallback files to deterministic test data for this context
+            $moduleUnderTest = Get-Module -Name 'wara'
+            $dataDir = Join-Path -Path $moduleUnderTest.ModuleBase -ChildPath 'data'
+            New-Item -ItemType Directory -Force -Path $dataDir | Out-Null
+
+            $script:localRecommendationDataPath = Join-Path -Path $dataDir -ChildPath 'recommendations.json'
+            $script:localRecommendationResourceTypesPath = Join-Path -Path $dataDir -ChildPath 'WARAinScopeResTypes.csv'
+
+            $script:localRecommendationDataBackup = if (Test-Path -LiteralPath $script:localRecommendationDataPath -PathType Leaf) { Get-Content -Raw -LiteralPath $script:localRecommendationDataPath } else { $null }
+            $script:localRecommendationResourceTypesBackup = if (Test-Path -LiteralPath $script:localRecommendationResourceTypesPath -PathType Leaf) { Get-Content -Raw -LiteralPath $script:localRecommendationResourceTypesPath } else { $null }
+
+            Set-Content -LiteralPath $script:localRecommendationDataPath -Value $RecommendationObject_TestData_Raw -Encoding utf8 -NoNewline
+            Set-Content -LiteralPath $script:localRecommendationResourceTypesPath -Value $RecommendationResourceTypes_TestData_Raw -Encoding utf8 -NoNewline
+
+            Mock Connect-WAFAzure { write-host "Mocked Connect-WAFAzure" } -ModuleName 'wara'
+            Mock Invoke-WAFQuery { return $AllResources_TestData } -ModuleName 'wara'
+            Mock Invoke-WAFQueryLoop { return $QueryLoop_TestData } -ModuleName 'wara'
+            Mock Get-WAFAdvisorMetadata { return $AdvisorMeta_TestData } -ModuleName 'wara'
+
+            # Force remote fetch failures to ensure local fallback is used
+            Mock Invoke-RestMethod { throw [System.Net.WebException]::new('offline') } -ParameterFilter { $uri -eq 'https://azure.github.io/WARA-Build/objects/recommendations.json' } -ModuleName 'wara'
+            Mock Invoke-RestMethod { throw [System.Net.WebException]::new('offline') } -ParameterFilter {
+                $uri -in @(
+                    'https://azure.github.io/WARA-Build/objects/WARAinScopeResTypes.csv',
+                    'https://raw.githubusercontent.com/Azure/Azure-Proactive-Resiliency-Library-v2/refs/heads/main/tools/WARAinScopeResTypes.csv'
+                )
+            } -ModuleName 'wara'
+
+            Mock Get-WARAOtherRecommendations { return $null } -ModuleName 'wara'
+
+            Mock Get-WAFAdvisorRecommendation {
+                $AdvData = InModuleScope 'advisor' -Parameters @{
+                        Advisor_TestData = $Advisor_TestData
+                    } {
+                        Build-WAFAdvisorObject -AdvQueryResult $Advisor_TestData
+                    }
+                return $AdvData
+            } -ModuleName 'wara'
+
+            Mock Get-WAFTaggedResourceGroup { return $TaggedResourceGroup_TestData } -ModuleName 'wara'
+            Mock Get-WAFTaggedResource { return $TaggedResource_TestData } -ModuleName 'wara'
+            Mock Get-WAFOldOutage { return $Outage_TestData } -ModuleName 'wara'
+            Mock Get-WAFResourceRetirement { return $Retirement_TestData } -ModuleName 'wara'
+            Mock Get-WAFSupportTicket { return $SupportTicket_TestData } -ModuleName 'wara'
+            Mock Get-WAFServiceHealth { return $ServiceHealth_TestData } -ModuleName 'wara'
+        }
+
+        AfterAll {
+            if ($null -eq $script:localRecommendationDataBackup) {
+                Remove-Item -LiteralPath $script:localRecommendationDataPath -Force -ErrorAction SilentlyContinue
+            }
+            else {
+                Set-Content -LiteralPath $script:localRecommendationDataPath -Value $script:localRecommendationDataBackup -Encoding utf8 -NoNewline
+            }
+
+            if ($null -eq $script:localRecommendationResourceTypesBackup) {
+                Remove-Item -LiteralPath $script:localRecommendationResourceTypesPath -Force -ErrorAction SilentlyContinue
+            }
+            else {
+                Set-Content -LiteralPath $script:localRecommendationResourceTypesPath -Value $script:localRecommendationResourceTypesBackup -Encoding utf8 -NoNewline
+            }
+        }
+
+        It 'Should use local fallback files when remote fetch fails' {
+            $tenantId = $(New-Guid).Guid
+            $test_subscriptionIds = "11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222"
+            $scriptBlock = Start-WARACollector -TenantID $tenantId -SubscriptionIds $test_subscriptionIds -Debug -PassThru
+
+            Assert-MockCalled Invoke-RestMethod -Times 1 -ParameterFilter { $uri -eq 'https://azure.github.io/WARA-Build/objects/recommendations.json' } -ModuleName 'wara'
+            Assert-MockCalled Invoke-RestMethod -Times 1 -ParameterFilter { $uri -eq 'https://azure.github.io/WARA-Build/objects/WARAinScopeResTypes.csv' } -ModuleName 'wara'
+
+            # Same assertions as the happy-path test; if these pass while Invoke-RestMethod throws,
+            # the cmdlet must have loaded the recommendation artifacts from local fallback files.
+            $scriptblock.impactedresources.count | Should -BeExactly 51
+            $scriptblock.impactedresources.where({ $_.type -eq "Microsoft.ApiManagement/service" }).count | Should -BeExactly 19
+            $scriptblock.impactedresources.where({ $_.type -eq "Microsoft.ContainerService/managedClusters" }).count | Should -BeExactly 28
+            $scriptblock.impactedresources.where({ $_.type -eq "Microsoft.Network/vpnSites" }).count | Should -BeExactly 4
+            $scriptblock.advisory.count | Should -BeExactly 4
+            $scriptblock.resourcetype.count | Should -BeExactly 3
+            $scriptblock.retirements.count | Should -BeExactly 3
+            $scriptblock.supporttickets.count | Should -BeExactly 3
             $scriptblock.servicehealth.count | Should -BeExactly 9
         }
     }

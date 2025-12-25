@@ -261,10 +261,26 @@ function Start-WARACollector {
         Write-Debug "Specialized Workloads: $SpecializedWorkloads"
     }
 
-    #Import Recommendation Object from WARA-Build GitHub Pages Site
+    # Local offline fallbacks for recommendation artifacts
+    $waraDataDir = Join-Path -Path $PSScriptRoot -ChildPath 'data'
+    $localRecommendationDataPath = Join-Path -Path $waraDataDir -ChildPath 'recommendations.json'
+    $localRecommendationResourceTypesPath = Join-Path -Path $waraDataDir -ChildPath 'WARAinScopeResTypes.csv'
+
+    #Import Recommendation Object from WARA-Build GitHub Pages Site (fallback to local copy if unreachable)
     Write-Progress -Activity 'WARA Collector' -Status 'Importing APRL Recommendation Object from GitHub' -PercentComplete 5 -Id 1
     Write-Debug 'Importing APRL Recommendation Object from GitHub'
-    $RecommendationObject = Invoke-RestMethod $RecommendationDataUri
+    try {
+        $RecommendationObject = Invoke-RestMethod -Uri $RecommendationDataUri -ErrorAction Stop
+    }
+    catch {
+        if (Test-Path -LiteralPath $localRecommendationDataPath -PathType Leaf) {
+            Write-Warning ("Failed to download recommendations from '{0}'. Falling back to local file: '{1}'. Error: {2}" -f $RecommendationDataUri, $localRecommendationDataPath, $_.Exception.Message)
+            $RecommendationObject = Get-Content -Raw -LiteralPath $localRecommendationDataPath | ConvertFrom-Json -Depth 50
+        }
+        else {
+            throw
+        }
+    }
     Write-Debug "Count of APRL Recommendation Object: $($RecommendationObject.count)"
 
     #Create Recommendation Object HashTable for faster lookup
@@ -274,10 +290,21 @@ function Start-WARACollector {
     $RecommendationObject.ForEach({ $RecommendationObjectHash[$_.aprlGuid] = $_ })
     Write-Debug "Count of Recommendation Object Hashtable: $($RecommendationObjectHash.count)"
 
-    #Import WARA InScope Resource Types CSV from APRL
+    #Import WARA InScope Resource Types CSV from APRL (fallback to local copy if unreachable)
     Write-Debug 'Importing WARA InScope Resource Types CSV from GitHub'
     Write-Progress -Activity 'WARA Collector' -Status 'Importing WARA InScope Resource Types CSV' -PercentComplete 11 -Id 1
-    $RecommendationResourceTypes = Invoke-RestMethod $RecommendationResourceTypesUri
+    try {
+        $RecommendationResourceTypes = Invoke-RestMethod -Uri $RecommendationResourceTypesUri -ErrorAction Stop
+    }
+    catch {
+        if (Test-Path -LiteralPath $localRecommendationResourceTypesPath -PathType Leaf) {
+            Write-Warning ("Failed to download WARA in-scope resource types from '{0}'. Falling back to local file: '{1}'. Error: {2}" -f $RecommendationResourceTypesUri, $localRecommendationResourceTypesPath, $_.Exception.Message)
+            $RecommendationResourceTypes = Get-Content -Raw -LiteralPath $localRecommendationResourceTypesPath
+        }
+        else {
+            throw
+        }
+    }
     $RecommendationResourceTypes = $RecommendationResourceTypes | ConvertFrom-Csv | Where-Object { $_.WARAinScope -eq 'yes' }
     Write-Debug "Count of WARA InScope Resource Types: $($RecommendationResourceTypes.count)"
 
