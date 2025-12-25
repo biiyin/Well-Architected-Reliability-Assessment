@@ -155,7 +155,8 @@ function Ensure-AzureLogin {
         $connectParams.Tenant = $TenantId
     }
 
-    Write-Host "Connecting to Azure (Environment=$AzureEnvironment${(if ($TenantId) { ", Tenant=$TenantId" } else { '' })})..." -ForegroundColor Yellow
+    $tenantSuffix = if ($TenantId) { ", Tenant=$TenantId" } else { '' }
+    Write-Host "Connecting to Azure (Environment=$AzureEnvironment$tenantSuffix)..." -ForegroundColor Yellow
     Connect-AzAccount @connectParams | Out-Null
 }
 

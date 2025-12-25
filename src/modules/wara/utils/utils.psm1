@@ -110,6 +110,8 @@ function Add-WAFResourceTopology {
         'topology_privateEndpointSubnetIds',
         'topology_privateEndpointVnetIds',
         'topology_privateLinkTargetIds',
+        'topology_vnetPeeringRemoteVnetIds',
+        'topology_vnetPeeringDetails',
         'topology_connectedResourceIds',
         'topology_publicNetworkAccess'
     )
@@ -181,6 +183,75 @@ resources
             if ($null -eq $s) { continue }
             if ([string]::IsNullOrWhiteSpace([string]$s.subnetId)) { continue }
             $subnetToVnet[([string]$s.subnetId).ToLowerInvariant()] = [string]$s.vnetId
+        }
+
+        # VNet Peerings: map local VNet -> remote VNet(s)
+        $vnetPeeringQuery = @"
+resources
+| where type =~ 'microsoft.network/virtualnetworks/virtualnetworkpeerings'
+| extend localVnetId = tostring(extract('(.+)/virtualNetworkPeerings/[^/]+$', 1, id))
+| extend remoteVnetId = tostring(properties.remoteVirtualNetwork.id)
+| extend peeringState = tostring(properties.peeringState)
+| extend allowVnetAccess = tobool(properties.allowVirtualNetworkAccess)
+| extend allowForwardedTraffic = tobool(properties.allowForwardedTraffic)
+| extend allowGatewayTransit = tobool(properties.allowGatewayTransit)
+| extend useRemoteGateways = tobool(properties.useRemoteGateways)
+| project peeringId = id, peeringName = name, subscriptionId, resourceGroup, location, localVnetId, remoteVnetId, peeringState, allowVnetAccess, allowForwardedTraffic, allowGatewayTransit, useRemoteGateways
+"@
+        $vnetPeerings = Invoke-WAFQuery -Query $vnetPeeringQuery -SubscriptionIds $SubscriptionIds
+        $vnetToRemoteVnetIds = @{}
+        $vnetToPeeringDetails = @{}
+        foreach ($p in @($vnetPeerings)) {
+            if ($null -eq $p) { continue }
+            if ([string]::IsNullOrWhiteSpace([string]$p.localVnetId)) { continue }
+            if ([string]::IsNullOrWhiteSpace([string]$p.remoteVnetId)) { continue }
+
+            $localId = ([string]$p.localVnetId).ToLowerInvariant()
+            if (-not $vnetToRemoteVnetIds.ContainsKey($localId)) { $vnetToRemoteVnetIds[$localId] = New-Object System.Collections.Generic.List[string] }
+            if (-not $vnetToPeeringDetails.ContainsKey($localId)) { $vnetToPeeringDetails[$localId] = New-Object System.Collections.Generic.List[string] }
+
+            $vnetToRemoteVnetIds[$localId].Add([string]$p.remoteVnetId)
+
+            $detail = "{0} (state={1}, fwd={2}, gwT={3}, useRGW={4})" -f [string]$p.remoteVnetId, [string]$p.peeringState, [string]$p.allowForwardedTraffic, [string]$p.allowGatewayTransit, [string]$p.useRemoteGateways
+            $vnetToPeeringDetails[$localId].Add($detail)
+        }
+
+        # Fallback for clouds/tenants where ARG does not return virtualNetworkPeerings (e.g., AzureChinaCloud):
+        # Use control-plane cmdlets to enumerate peerings per VNet already present in resource inventory.
+        if ($vnetToRemoteVnetIds.Count -eq 0) {
+            $getPeeringCmd = Get-Command -Name Get-AzVirtualNetworkPeering -ErrorAction SilentlyContinue
+            if ($null -ne $getPeeringCmd) {
+                Write-Verbose 'No VNet peerings returned by ARG query; falling back to Get-AzVirtualNetworkPeering.'
+
+                $vnetsInInventory = @($ResourceInventory | Where-Object {
+                        $_.type -eq 'microsoft.network/virtualnetworks' -and -not [string]::IsNullOrWhiteSpace([string]$_.id)
+                    })
+
+                foreach ($vnet in $vnetsInInventory) {
+                    $localVnetId = ([string]$vnet.id).ToLowerInvariant()
+                    $rg = [string]$vnet.resourceGroup
+                    $vnetName = [string]$vnet.name
+                    if ([string]::IsNullOrWhiteSpace($rg) -or [string]::IsNullOrWhiteSpace($vnetName)) { continue }
+
+                    $peerings = @(Get-AzVirtualNetworkPeering -ResourceGroupName $rg -VirtualNetworkName $vnetName -ErrorAction SilentlyContinue)
+                    foreach ($peering in $peerings) {
+                        if ($null -eq $peering) { continue }
+                        $remoteId = [string]$peering.RemoteVirtualNetwork.Id
+                        if ([string]::IsNullOrWhiteSpace($remoteId)) { continue }
+
+                        if (-not $vnetToRemoteVnetIds.ContainsKey($localVnetId)) { $vnetToRemoteVnetIds[$localVnetId] = New-Object System.Collections.Generic.List[string] }
+                        if (-not $vnetToPeeringDetails.ContainsKey($localVnetId)) { $vnetToPeeringDetails[$localVnetId] = New-Object System.Collections.Generic.List[string] }
+
+                        $vnetToRemoteVnetIds[$localVnetId].Add($remoteId)
+
+                        $detail = "{0} (state={1}, fwd={2}, gwT={3}, useRGW={4})" -f $remoteId, [string]$peering.PeeringState, [string]$peering.AllowForwardedTraffic, [string]$peering.AllowGatewayTransit, [string]$peering.UseRemoteGateways
+                        $vnetToPeeringDetails[$localVnetId].Add($detail)
+                    }
+                }
+            }
+            else {
+                Write-Verbose 'No VNet peerings returned by ARG query and Get-AzVirtualNetworkPeering is unavailable; skipping peering enrichment.'
+            }
         }
 
         # NICs: map NIC -> subnet/publicIP/privateIP and VM -> NICs
@@ -390,6 +461,16 @@ resources
                 }
                 $r.topology_privateEndpointSubnetIds = Join-StringList -Value $peSubnetIds
                 $r.topology_privateEndpointVnetIds = Join-StringList -Value $peVnetIds
+            }
+
+            # If resource is a VNet, add peering info (local VNet -> remote VNet)
+            if ($rtype -ieq 'microsoft.network/virtualnetworks') {
+                if ($vnetToRemoteVnetIds.ContainsKey($rid)) {
+                    $r.topology_vnetPeeringRemoteVnetIds = Join-StringList -Value $vnetToRemoteVnetIds[$rid]
+                }
+                if ($vnetToPeeringDetails.ContainsKey($rid)) {
+                    $r.topology_vnetPeeringDetails = Join-StringList -Value $vnetToPeeringDetails[$rid]
+                }
             }
         }
     }

@@ -1056,7 +1056,25 @@ class validationResourceFactory {
                 $r
             }
             else {
-                Write-Error "No recommendation found for $($impactedResource.type) with resource id $($impactedResource.id)"
+                Write-Warning "No recommendation found for $($impactedResource.type) with resource id $($impactedResource.id). Emitting placeholder row and continuing."
+
+                $r = [aprlResourceObj]::new()
+                $r.validationAction = [validationResourceFactory]::getValidationAction("No Recommendations")
+                $r.recommendationId = ''
+                $r.name = $impactedResource.name
+                $r.id = $impactedResource.id
+                $r.type = $impactedResource.type
+                $r.location = $impactedResource.location
+                $r.subscriptionId = $impactedResource.subscriptionId
+                $r.resourceGroup = $impactedResource.resourceGroup
+                $r.param1 = ''
+                $r.param2 = ''
+                $r.param3 = ''
+                $r.param4 = ''
+                $r.param5 = ''
+                $r.checkName = ''
+                $r.selector = $impactedResource.selector ?? "APRL"
+                $r
             }
         }
 

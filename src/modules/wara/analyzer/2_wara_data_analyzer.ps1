@@ -1051,6 +1051,8 @@ function Convert-TopologyToNetworkConfig {
         privateEndpointSubnetIds = $Resource.topology_privateEndpointSubnetIds
         privateEndpointVnetIds  = $Resource.topology_privateEndpointVnetIds
         privateLinkTargetIds    = $Resource.topology_privateLinkTargetIds
+        vnetPeeringRemoteVnetIds = $Resource.topology_vnetPeeringRemoteVnetIds
+        vnetPeeringDetails       = $Resource.topology_vnetPeeringDetails
         connectedResourceIds    = $Resource.topology_connectedResourceIds
         publicNetworkAccess     = $Resource.topology_publicNetworkAccess
     }
