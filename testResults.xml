@@ -1,672 +1,700 @@
 ﻿<?xml version="1.0" encoding="utf-8" standalone="no"?>
-<test-results xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="nunit_schema_2.5.xsd" name="Pester" total="117" errors="0" failures="0" not-run="0" inconclusive="0" ignored="0" skipped="0" invalid="0" date="2025-12-25" time="16:02:22">
-  <environment cwd="C:\Users\hanxia\repos\Well-Architected-Reliability-Assessment" machine-name="XH-STUDIO" os-version="10.0.26200" platform="Microsoft Windows 11 Pro|C:\WINDOWS|\Device\Harddisk0\Partition3" clr-version="9.0.10" nunit-version="2.5.8.0" user-domain="FAREAST" user="hanxia" />
+<test-results xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="nunit_schema_2.5.xsd" name="Pester" total="129" errors="0" failures="0" not-run="0" inconclusive="0" ignored="0" skipped="0" invalid="0" date="2025-12-25" time="23:56:02">
+  <environment machine-name="XH-STUDIO" platform="Microsoft Windows 11 Pro|C:\WINDOWS|\Device\Harddisk0\Partition3" nunit-version="2.5.8.0" clr-version="9.0.10" os-version="10.0.26200" user-domain="FAREAST" cwd="C:\Users\hanxia\repos\Well-Architected-Reliability-Assessment" user="hanxia" />
   <culture-info current-culture="zh-CN" current-uiculture="zh-CN" />
-  <test-suite type="TestFixture" name="Pester" executed="True" result="Success" success="True" time="37.7078" asserts="0" description="Pester">
+  <test-suite type="TestFixture" name="Pester" executed="True" result="Success" success="True" time="61.0116" asserts="0" description="Pester">
     <results>
-      <test-suite type="TestFixture" name="C:\Users\hanxia\repos\Well-Architected-Reliability-Assessment\src\tests\advisor\advisor.tests.ps1" executed="True" result="Success" success="True" time="3.6916" asserts="0" description="C:\Users\hanxia\repos\Well-Architected-Reliability-Assessment\src\tests\advisor\advisor.tests.ps1">
+      <test-suite type="TestFixture" name="C:\Users\hanxia\repos\Well-Architected-Reliability-Assessment\src\tests\advisor\advisor.tests.ps1" executed="True" result="Success" success="True" time="3.2827" asserts="0" description="C:\Users\hanxia\repos\Well-Architected-Reliability-Assessment\src\tests\advisor\advisor.tests.ps1">
         <results>
-          <test-suite type="TestFixture" name="Build-WAFAdvisorObject" executed="True" result="Success" success="True" time="0.3956" asserts="0" description="Build-WAFAdvisorObject">
+          <test-suite type="TestFixture" name="Build-WAFAdvisorObject" executed="True" result="Success" success="True" time="0.347" asserts="0" description="Build-WAFAdvisorObject">
             <results>
-              <test-suite type="TestFixture" name="Build-WAFAdvisorObject.When given a raw list of advisories" executed="True" result="Success" success="True" time="0.3679" asserts="0" description="Build-WAFAdvisorObject.When given a raw list of advisories">
+              <test-suite type="TestFixture" name="Build-WAFAdvisorObject.When given a raw list of advisories" executed="True" result="Success" success="True" time="0.3246" asserts="0" description="Build-WAFAdvisorObject.When given a raw list of advisories">
                 <results>
-                  <test-case description="Should return the processed list as object" name="Build-WAFAdvisorObject.When given a raw list of advisories.Should return the processed list as object" time="0.2999" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should return the processed list as object" name="Build-WAFAdvisorObject.When given a raw list of advisories.Should return the processed list as object" time="0.2517" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
             </results>
           </test-suite>
-          <test-suite type="TestFixture" name="Get-WAFAdvisorRecommendations" executed="True" result="Success" success="True" time="0.7406" asserts="0" description="Get-WAFAdvisorRecommendations">
+          <test-suite type="TestFixture" name="Get-WAFAdvisorRecommendations" executed="True" result="Success" success="True" time="0.5511" asserts="0" description="Get-WAFAdvisorRecommendations">
             <results>
-              <test-suite type="TestFixture" name="Get-WAFAdvisorRecommendations.When given a valid subscription id" executed="True" result="Success" success="True" time="0.3309" asserts="0" description="Get-WAFAdvisorRecommendations.When given a valid subscription id">
+              <test-suite type="TestFixture" name="Get-WAFAdvisorRecommendations.When given a valid subscription id" executed="True" result="Success" success="True" time="0.1958" asserts="0" description="Get-WAFAdvisorRecommendations.When given a valid subscription id">
                 <results>
-                  <test-case description="Should return the corresponding advisories" name="Get-WAFAdvisorRecommendations.When given a valid subscription id.Should return the corresponding advisories" time="0.3163" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should return the corresponding advisories" name="Get-WAFAdvisorRecommendations.When given a valid subscription id.Should return the corresponding advisories" time="0.1869" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
             </results>
           </test-suite>
-          <test-suite type="TestFixture" name="Get-WAFAdvisorMetadata" executed="True" result="Success" success="True" time="2.4133" asserts="0" description="Get-WAFAdvisorMetadata">
+          <test-suite type="TestFixture" name="Get-WAFAdvisorMetadata" executed="True" result="Success" success="True" time="1.5819" asserts="0" description="Get-WAFAdvisorMetadata">
             <results>
-              <test-suite type="TestFixture" name="Get-WAFAdvisorMetadata.When the function is called" executed="True" result="Success" success="True" time="1.6614" asserts="0" description="Get-WAFAdvisorMetadata.When the function is called">
+              <test-suite type="TestFixture" name="Get-WAFAdvisorMetadata.When the function is called" executed="True" result="Success" success="True" time="1.0222" asserts="0" description="Get-WAFAdvisorMetadata.When the function is called">
                 <results>
-                  <test-case description="Should return the metadata" name="Get-WAFAdvisorMetadata.When the function is called.Should return the metadata" time="1.6505" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should return the metadata" name="Get-WAFAdvisorMetadata.When the function is called.Should return the metadata" time="1.0128" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
             </results>
           </test-suite>
-          <test-suite type="TestFixture" name="advisorResourceObj" executed="True" result="Success" success="True" time="2.7206" asserts="0" description="advisorResourceObj">
+          <test-suite type="TestFixture" name="advisorResourceObj" executed="True" result="Success" success="True" time="1.8175" asserts="0" description="advisorResourceObj">
             <results>
-              <test-suite type="TestFixture" name="advisorResourceObj.When the class is instantiated" executed="True" result="Success" success="True" time="0.2606" asserts="0" description="advisorResourceObj.When the class is instantiated">
+              <test-suite type="TestFixture" name="advisorResourceObj.When the class is instantiated" executed="True" result="Success" success="True" time="0.1827" asserts="0" description="advisorResourceObj.When the class is instantiated">
                 <results>
-                  <test-case description="Should be of type advisorResourceObj" name="advisorResourceObj.When the class is instantiated.Should be of type advisorResourceObj" time="0.0314" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="Should work with the Equals() method correctly" name="advisorResourceObj.When the class is instantiated.Should work with the Equals() method correctly" time="0.0366" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="Should have the correct properties" name="advisorResourceObj.When the class is instantiated.Should have the correct properties" time="0.0276" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="Should be able to be sorted as a collection and remove duplicates using Linq Distinct method" name="advisorResourceObj.When the class is instantiated.Should be able to be sorted as a collection and remove duplicates using Linq Distinct method" time="0.1437" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should be of type advisorResourceObj" name="advisorResourceObj.When the class is instantiated.Should be of type advisorResourceObj" time="0.0232" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should work with the Equals() method correctly" name="advisorResourceObj.When the class is instantiated.Should work with the Equals() method correctly" time="0.0308" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should have the correct properties" name="advisorResourceObj.When the class is instantiated.Should have the correct properties" time="0.0187" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should be able to be sorted as a collection and remove duplicates using Linq Distinct method" name="advisorResourceObj.When the class is instantiated.Should be able to be sorted as a collection and remove duplicates using Linq Distinct method" time="0.1013" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
             </results>
           </test-suite>
         </results>
       </test-suite>
-      <test-suite type="TestFixture" name="C:\Users\hanxia\repos\Well-Architected-Reliability-Assessment\src\tests\analyzer\analyzer.tests.ps1" executed="True" result="Success" success="True" time="3.8394" asserts="0" description="C:\Users\hanxia\repos\Well-Architected-Reliability-Assessment\src\tests\analyzer\analyzer.tests.ps1">
+      <test-suite type="TestFixture" name="C:\Users\hanxia\repos\Well-Architected-Reliability-Assessment\src\tests\analyzer\analyzer.tests.ps1" executed="True" result="Success" success="True" time="3.6891" asserts="0" description="C:\Users\hanxia\repos\Well-Architected-Reliability-Assessment\src\tests\analyzer\analyzer.tests.ps1">
         <results>
-          <test-suite type="TestFixture" name="WARA Analyzer - offline artifact fallback" executed="True" result="Success" success="True" time="3.7362" asserts="0" description="WARA Analyzer - offline artifact fallback">
+          <test-suite type="TestFixture" name="WARA Analyzer - offline artifact fallback" executed="True" result="Success" success="True" time="3.504" asserts="0" description="WARA Analyzer - offline artifact fallback">
             <results>
-              <test-case description="Uses local WARAinScopeResTypes.csv when remote fetch fails" name="WARA Analyzer - offline artifact fallback.Uses local WARAinScopeResTypes.csv when remote fetch fails" time="3.7169" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="Uses local WARAinScopeResTypes.csv when remote fetch fails" name="WARA Analyzer - offline artifact fallback.Uses local WARAinScopeResTypes.csv when remote fetch fails" time="3.4859" asserts="0" success="True" result="Success" executed="True" />
             </results>
           </test-suite>
         </results>
       </test-suite>
-      <test-suite type="TestFixture" name="C:\Users\hanxia\repos\Well-Architected-Reliability-Assessment\src\tests\collector\collector.tests.ps1" executed="True" result="Success" success="True" time="0.9718" asserts="0" description="C:\Users\hanxia\repos\Well-Architected-Reliability-Assessment\src\tests\collector\collector.tests.ps1">
+      <test-suite type="TestFixture" name="C:\Users\hanxia\repos\Well-Architected-Reliability-Assessment\src\tests\collector\collector.tests.ps1" executed="True" result="Success" success="True" time="2.2906" asserts="0" description="C:\Users\hanxia\repos\Well-Architected-Reliability-Assessment\src\tests\collector\collector.tests.ps1">
         <results>
-          <test-suite type="TestFixture" name="Get-WAFTaggedResource" executed="True" result="Success" success="True" time="0.1078" asserts="0" description="Get-WAFTaggedResource">
+          <test-suite type="TestFixture" name="Get-WAFTaggedResource" executed="True" result="Success" success="True" time="0.2575" asserts="0" description="Get-WAFTaggedResource">
             <results>
-              <test-suite type="TestFixture" name="Get-WAFTaggedResource.Should return a list of resourceIds where the count is greater than the number of items in the tagArray" executed="True" result="Success" success="True" time="0.0977" asserts="0" description="Get-WAFTaggedResource.Should return a list of resourceIds where the count is greater than the number of items in the tagArray">
+              <test-suite type="TestFixture" name="Get-WAFTaggedResource.Should return a list of resourceIds where the count is greater than the number of items in the tagArray" executed="True" result="Success" success="True" time="0.2478" asserts="0" description="Get-WAFTaggedResource.Should return a list of resourceIds where the count is greater than the number of items in the tagArray">
                 <results>
-                  <test-case description="Should return a list of resourceIds" name="Get-WAFTaggedResource.Should return a list of resourceIds where the count is greater than the number of items in the tagArray.Should return a list of resourceIds" time="0.0879" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should return a list of resourceIds" name="Get-WAFTaggedResource.Should return a list of resourceIds where the count is greater than the number of items in the tagArray.Should return a list of resourceIds" time="0.2364" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
             </results>
           </test-suite>
-          <test-suite type="TestFixture" name="Get-WAFTaggedResourceGroup" executed="True" result="Success" success="True" time="0.1878" asserts="0" description="Get-WAFTaggedResourceGroup">
+          <test-suite type="TestFixture" name="Get-WAFTaggedResourceGroup" executed="True" result="Success" success="True" time="0.3771" asserts="0" description="Get-WAFTaggedResourceGroup">
             <results>
-              <test-suite type="TestFixture" name="Get-WAFTaggedResourceGroup.Should return a list of resourceIds where the count is greater than the number of items in the tagArray" executed="True" result="Success" success="True" time="0.0628" asserts="0" description="Get-WAFTaggedResourceGroup.Should return a list of resourceIds where the count is greater than the number of items in the tagArray">
+              <test-suite type="TestFixture" name="Get-WAFTaggedResourceGroup.Should return a list of resourceIds where the count is greater than the number of items in the tagArray" executed="True" result="Success" success="True" time="0.1116" asserts="0" description="Get-WAFTaggedResourceGroup.Should return a list of resourceIds where the count is greater than the number of items in the tagArray">
                 <results>
-                  <test-case description="Should return a list of resourceIds" name="Get-WAFTaggedResourceGroup.Should return a list of resourceIds where the count is greater than the number of items in the tagArray.Should return a list of resourceIds" time="0.0515" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should return a list of resourceIds" name="Get-WAFTaggedResourceGroup.Should return a list of resourceIds where the count is greater than the number of items in the tagArray.Should return a list of resourceIds" time="0.1027" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
             </results>
           </test-suite>
-          <test-suite type="TestFixture" name="Invoke-WAFQueryLoop" executed="True" result="Success" success="True" time="0.4328" asserts="0" description="Invoke-WAFQueryLoop">
+          <test-suite type="TestFixture" name="Invoke-WAFQueryLoop" executed="True" result="Success" success="True" time="0.8113" asserts="0" description="Invoke-WAFQueryLoop">
             <results>
-              <test-suite type="TestFixture" name="Invoke-WAFQueryLoop.When given a recommendation object and a list of subscriptionIds" executed="True" result="Success" success="True" time="0.2356" asserts="0" description="Invoke-WAFQueryLoop.When given a recommendation object and a list of subscriptionIds">
+              <test-suite type="TestFixture" name="Invoke-WAFQueryLoop.When given a recommendation object and a list of subscriptionIds" executed="True" result="Success" success="True" time="0.4262" asserts="0" description="Invoke-WAFQueryLoop.When given a recommendation object and a list of subscriptionIds">
                 <results>
-                  <test-case description="Should return a list of resources" name="Invoke-WAFQueryLoop.When given a recommendation object and a list of subscriptionIds.Should return a list of resources" time="0.2259" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should return a list of resources" name="Invoke-WAFQueryLoop.When given a recommendation object and a list of subscriptionIds.Should return a list of resources" time="0.4182" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
             </results>
           </test-suite>
-          <test-suite type="TestFixture" name="Get-WAFQueryByResourceType" executed="True" result="Success" success="True" time="0.6342" asserts="0" description="Get-WAFQueryByResourceType">
+          <test-suite type="TestFixture" name="Get-WAFQueryByResourceType" executed="True" result="Success" success="True" time="1.4507" asserts="0" description="Get-WAFQueryByResourceType">
             <results>
-              <test-suite type="TestFixture" name="Get-WAFQueryByResourceType.When given a current recommendation object and a good filter list" executed="True" result="Success" success="True" time="0.1908" asserts="0" description="Get-WAFQueryByResourceType.When given a current recommendation object and a good filter list">
+              <test-suite type="TestFixture" name="Get-WAFQueryByResourceType.When given a current recommendation object and a good filter list" executed="True" result="Success" success="True" time="0.6322" asserts="0" description="Get-WAFQueryByResourceType.When given a current recommendation object and a good filter list">
                 <results>
-                  <test-case description="Should return the correct list of recommendations" name="Get-WAFQueryByResourceType.When given a current recommendation object and a good filter list.Should return the correct list of recommendations" time="0.1791" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should return the correct list of recommendations" name="Get-WAFQueryByResourceType.When given a current recommendation object and a good filter list.Should return the correct list of recommendations" time="0.6194" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
             </results>
           </test-suite>
-          <test-suite type="TestFixture" name="Get-WAFResourceType" executed="True" result="Success" success="True" time="0.6826" asserts="0" description="Get-WAFResourceType">
+          <test-suite type="TestFixture" name="Get-WAFResourceType" executed="True" result="Success" success="True" time="1.4995" asserts="0" description="Get-WAFResourceType">
             <results>
-              <test-suite type="TestFixture" name="Get-WAFResourceType.When given a list of subscriptionIds" executed="True" result="Success" success="True" time="0.0333" asserts="0" description="Get-WAFResourceType.When given a list of subscriptionIds">
+              <test-suite type="TestFixture" name="Get-WAFResourceType.When given a list of subscriptionIds" executed="True" result="Success" success="True" time="0.0421" asserts="0" description="Get-WAFResourceType.When given a list of subscriptionIds">
                 <results>
-                  <test-case description="Should return a list of resource types" name="Get-WAFResourceType.When given a list of subscriptionIds.Should return a list of resource types" time="0.0219" asserts="0" success="True" result="Success" executed="True" />
-                </results>
-              </test-suite>
-            </results>
-          </test-suite>
-        </results>
-      </test-suite>
-      <test-suite type="TestFixture" name="C:\Users\hanxia\repos\Well-Architected-Reliability-Assessment\src\tests\outage\outage.tests.ps1" executed="True" result="Success" success="True" time="1.3442" asserts="0" description="C:\Users\hanxia\repos\Well-Architected-Reliability-Assessment\src\tests\outage\outage.tests.ps1">
-        <results>
-          <test-suite type="TestFixture" name="New-WAFOutageObject" executed="True" result="Success" success="True" time="0.1879" asserts="0" description="New-WAFOutageObject">
-            <results>
-              <test-suite type="TestFixture" name="New-WAFOutageObject.When to get an OutageObject" executed="True" result="Success" success="True" time="0.1666" asserts="0" description="New-WAFOutageObject.When to get an OutageObject">
-                <results>
-                  <test-case description="Should return an OutageObject with a single impacted service" name="New-WAFOutageObject.When to get an OutageObject.Should return an OutageObject with a single impacted service" time="0.1001" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="Should return an OutageObject with multiple impacted services" name="New-WAFOutageObject.When to get an OutageObject.Should return an OutageObject with multiple impacted services" time="0.0502" asserts="0" success="True" result="Success" executed="True" />
-                </results>
-              </test-suite>
-            </results>
-          </test-suite>
-          <test-suite type="TestFixture" name="Get-WAFOutage" executed="True" result="Success" success="True" time="0.3648" asserts="0" description="Get-WAFOutage">
-            <results>
-              <test-suite type="TestFixture" name="Get-WAFOutage.When to get an OutageObject" executed="True" result="Success" success="True" time="0.1645" asserts="0" description="Get-WAFOutage.When to get an OutageObject">
-                <results>
-                  <test-case description="Should return an OutageObject" name="Get-WAFOutage.When to get an OutageObject.Should return an OutageObject" time="0.0612" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="Should return multiple OutageObjects" name="Get-WAFOutage.When to get an OutageObject.Should return multiple OutageObjects" time="0.068" asserts="0" success="True" result="Success" executed="True" />
-                </results>
-              </test-suite>
-            </results>
-          </test-suite>
-          <test-suite type="TestFixture" name="Get-WAFOldOutage" executed="True" result="Success" success="True" time="0.4334" asserts="0" description="Get-WAFOldOutage">
-            <results>
-              <test-suite type="TestFixture" name="Get-WAFOldOutage.When queried should return the base outage data from the API" executed="True" result="Success" success="True" time="0.0563" asserts="0" description="Get-WAFOldOutage.When queried should return the base outage data from the API">
-                <results>
-                  <test-case description="Should return an OutageObject" name="Get-WAFOldOutage.When queried should return the base outage data from the API.Should return an OutageObject" time="0.0197" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should return a list of resource types" name="Get-WAFResourceType.When given a list of subscriptionIds.Should return a list of resource types" time="0.0348" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
             </results>
           </test-suite>
         </results>
       </test-suite>
-      <test-suite type="TestFixture" name="C:\Users\hanxia\repos\Well-Architected-Reliability-Assessment\src\tests\retirement\retirement.tests.ps1" executed="True" result="Success" success="True" time="1.3096" asserts="0" description="C:\Users\hanxia\repos\Well-Architected-Reliability-Assessment\src\tests\retirement\retirement.tests.ps1">
+      <test-suite type="TestFixture" name="C:\Users\hanxia\repos\Well-Architected-Reliability-Assessment\src\tests\outage\outage.tests.ps1" executed="True" result="Success" success="True" time="1.7306" asserts="0" description="C:\Users\hanxia\repos\Well-Architected-Reliability-Assessment\src\tests\outage\outage.tests.ps1">
         <results>
-          <test-suite type="TestFixture" name="New-WAFResourceRetirementObject" executed="True" result="Success" success="True" time="0.1036" asserts="0" description="New-WAFResourceRetirementObject">
+          <test-suite type="TestFixture" name="New-WAFOutageObject" executed="True" result="Success" success="True" time="0.2981" asserts="0" description="New-WAFOutageObject">
             <results>
-              <test-suite type="TestFixture" name="New-WAFResourceRetirementObject.When to get a RetirementObject" executed="True" result="Success" success="True" time="0.0835" asserts="0" description="New-WAFResourceRetirementObject.When to get a RetirementObject">
+              <test-suite type="TestFixture" name="New-WAFOutageObject.When to get an OutageObject" executed="True" result="Success" success="True" time="0.2853" asserts="0" description="New-WAFOutageObject.When to get an OutageObject">
                 <results>
-                  <test-case description="Should return a RetirementObject with a single impacted service" name="New-WAFResourceRetirementObject.When to get a RetirementObject.Should return a RetirementObject with a single impacted service" time="0.0457" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="Should return a RetirementObject with multiple impacted services" name="New-WAFResourceRetirementObject.When to get a RetirementObject.Should return a RetirementObject with multiple impacted services" time="0.022" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should return an OutageObject with a single impacted service" name="New-WAFOutageObject.When to get an OutageObject.Should return an OutageObject with a single impacted service" time="0.2232" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should return an OutageObject with multiple impacted services" name="New-WAFOutageObject.When to get an OutageObject.Should return an OutageObject with multiple impacted services" time="0.0185" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
             </results>
           </test-suite>
-          <test-suite type="TestFixture" name="Get-WAFResourceRetirement" executed="True" result="Success" success="True" time="0.3069" asserts="0" description="Get-WAFResourceRetirement">
+          <test-suite type="TestFixture" name="Get-WAFOutage" executed="True" result="Success" success="True" time="0.5452" asserts="0" description="Get-WAFOutage">
             <results>
-              <test-suite type="TestFixture" name="Get-WAFResourceRetirement.When to get RetirementObjects" executed="True" result="Success" success="True" time="0.1925" asserts="0" description="Get-WAFResourceRetirement.When to get RetirementObjects">
+              <test-suite type="TestFixture" name="Get-WAFOutage.When to get an OutageObject" executed="True" result="Success" success="True" time="0.239" asserts="0" description="Get-WAFOutage.When to get an OutageObject">
                 <results>
-                  <test-case description="Should return a RetirementObject" name="Get-WAFResourceRetirement.When to get RetirementObjects.Should return a RetirementObject" time="0.0658" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="Should return multiple RetirementObjects" name="Get-WAFResourceRetirement.When to get RetirementObjects.Should return multiple RetirementObjects" time="0.1088" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should return an OutageObject" name="Get-WAFOutage.When to get an OutageObject.Should return an OutageObject" time="0.1398" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should return multiple OutageObjects" name="Get-WAFOutage.When to get an OutageObject.Should return multiple OutageObjects" time="0.0757" asserts="0" success="True" result="Success" executed="True" />
+                </results>
+              </test-suite>
+            </results>
+          </test-suite>
+          <test-suite type="TestFixture" name="Get-WAFOldOutage" executed="True" result="Success" success="True" time="0.5838" asserts="0" description="Get-WAFOldOutage">
+            <results>
+              <test-suite type="TestFixture" name="Get-WAFOldOutage.When queried should return the base outage data from the API" executed="True" result="Success" success="True" time="0.0303" asserts="0" description="Get-WAFOldOutage.When queried should return the base outage data from the API">
+                <results>
+                  <test-case description="Should return an OutageObject" name="Get-WAFOldOutage.When queried should return the base outage data from the API.Should return an OutageObject" time="0.0154" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
             </results>
           </test-suite>
         </results>
       </test-suite>
-      <test-suite type="TestFixture" name="C:\Users\hanxia\repos\Well-Architected-Reliability-Assessment\src\tests\runbook\runbook.tests.ps1" executed="True" result="Success" success="True" time="3.5123" asserts="0" description="C:\Users\hanxia\repos\Well-Architected-Reliability-Assessment\src\tests\runbook\runbook.tests.ps1">
+      <test-suite type="TestFixture" name="C:\Users\hanxia\repos\Well-Architected-Reliability-Assessment\src\tests\retirement\retirement.tests.ps1" executed="True" result="Success" success="True" time="1.7734" asserts="0" description="C:\Users\hanxia\repos\Well-Architected-Reliability-Assessment\src\tests\retirement\retirement.tests.ps1">
         <results>
-          <test-suite type="TestFixture" name="Get-RunbookSchema" executed="True" result="Success" success="True" time="0.1273" asserts="0" description="Get-RunbookSchema">
+          <test-suite type="TestFixture" name="New-WAFResourceRetirementObject" executed="True" result="Success" success="True" time="0.2724" asserts="0" description="New-WAFResourceRetirementObject">
             <results>
-              <test-case description="Should return the runbook JSON schema" name="Get-RunbookSchema.Should return the runbook JSON schema" time="0.1163" asserts="0" success="True" result="Success" executed="True" />
-            </results>
-          </test-suite>
-          <test-suite type="TestFixture" name="New-RunbookCheckSet" executed="True" result="Success" success="True" time="0.1741" asserts="0" description="New-RunbookCheckSet">
-            <results>
-              <test-case description="Should return a new RunbookCheckSet object" name="New-RunbookCheckSet.Should return a new RunbookCheckSet object" time="0.0212" asserts="0" success="True" result="Success" executed="True" />
-            </results>
-          </test-suite>
-          <test-suite type="TestFixture" name="New-RunbookCheck" executed="True" result="Success" success="True" time="0.2071" asserts="0" description="New-RunbookCheck">
-            <results>
-              <test-case description="Should return a new RunbookCheck object" name="New-RunbookCheck.Should return a new RunbookCheck object" time="0.0203" asserts="0" success="True" result="Success" executed="True" />
-            </results>
-          </test-suite>
-          <test-suite type="TestFixture" name="New-RunbookRecommendation" executed="True" result="Success" success="True" time="0.239" asserts="0" description="New-RunbookRecommendation">
-            <results>
-              <test-case description="Should return a new RunbookRecommendation object" name="New-RunbookRecommendation.Should return a new RunbookRecommendation object" time="0.0183" asserts="0" success="True" result="Success" executed="True" />
-            </results>
-          </test-suite>
-          <test-suite type="TestFixture" name="New-Runbook" executed="True" result="Success" success="True" time="0.5244" asserts="0" description="New-Runbook">
-            <results>
-              <test-suite type="TestFixture" name="New-Runbook.When provided with runbook JSON contents" executed="True" result="Success" success="True" time="0.0784" asserts="0" description="New-Runbook.When provided with runbook JSON contents">
+              <test-suite type="TestFixture" name="New-WAFResourceRetirementObject.When to get a RetirementObject" executed="True" result="Success" success="True" time="0.2624" asserts="0" description="New-WAFResourceRetirementObject.When to get a RetirementObject">
                 <results>
-                  <test-case description="Should return a corresponding Runbook object" name="New-Runbook.When provided with runbook JSON contents.Should return a corresponding Runbook object" time="0.0699" asserts="0" success="True" result="Success" executed="True" />
-                </results>
-              </test-suite>
-              <test-suite type="TestFixture" name="New-Runbook.When provided with runbook JSON file path" executed="True" result="Success" success="True" time="0.1531" asserts="0" description="New-Runbook.When provided with runbook JSON file path">
-                <results>
-                  <test-case description="Should return a corresponding Runbook object" name="New-Runbook.When provided with runbook JSON file path.Should return a corresponding Runbook object" time="0.0595" asserts="0" success="True" result="Success" executed="True" />
-                </results>
-              </test-suite>
-              <test-suite type="TestFixture" name="New-Runbook.When provided with invalid runobok JSON file path" executed="True" result="Success" success="True" time="0.197" asserts="0" description="New-Runbook.When provided with invalid runobok JSON file path">
-                <results>
-                  <test-case description="Should throw an error indicating that the file is invalid" name="New-Runbook.When provided with invalid runobok JSON file path.Should throw an error indicating that the file is invalid" time="0.0326" asserts="0" success="True" result="Success" executed="True" />
-                </results>
-              </test-suite>
-              <test-suite type="TestFixture" name="New-Runbook.When provided with both runbook JSON contents and file path" executed="True" result="Success" success="True" time="0.2386" asserts="0" description="New-Runbook.When provided with both runbook JSON contents and file path">
-                <results>
-                  <test-case description="Should throw an error indicating that both parameters can not be used at the same time" name="New-Runbook.When provided with both runbook JSON contents and file path.Should throw an error indicating that both parameters can not be used at the same time" time="0.0133" asserts="0" success="True" result="Success" executed="True" />
-                </results>
-              </test-suite>
-              <test-suite type="TestFixture" name="New-Runbook.When no parameters are provided" executed="True" result="Success" success="True" time="0.2716" asserts="0" description="New-Runbook.When no parameters are provided">
-                <results>
-                  <test-case description="Should return a new Runbook" name="New-Runbook.When no parameters are provided.Should return a new Runbook" time="0.0172" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should return a RetirementObject with a single impacted service" name="New-WAFResourceRetirementObject.When to get a RetirementObject.Should return a RetirementObject with a single impacted service" time="0.1771" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should return a RetirementObject with multiple impacted services" name="New-WAFResourceRetirementObject.When to get a RetirementObject.Should return a RetirementObject with multiple impacted services" time="0.0525" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
             </results>
           </test-suite>
-          <test-suite type="TestFixture" name="Test-RunbookFile" executed="True" result="Success" success="True" time="0.6723" asserts="0" description="Test-RunbookFile">
+          <test-suite type="TestFixture" name="Get-WAFResourceRetirement" executed="True" result="Success" success="True" time="0.6949" asserts="0" description="Get-WAFResourceRetirement">
             <results>
-              <test-suite type="TestFixture" name="Test-RunbookFile.When the file doesn't contain valid JSON" executed="True" result="Success" success="True" time="0.0246" asserts="0" description="Test-RunbookFile.When the file doesn't contain valid JSON">
+              <test-suite type="TestFixture" name="Get-WAFResourceRetirement.When to get RetirementObjects" executed="True" result="Success" success="True" time="0.4122" asserts="0" description="Get-WAFResourceRetirement.When to get RetirementObjects">
                 <results>
-                  <test-case description="Should throw an error indicating so" name="Test-RunbookFile.When the file doesn't contain valid JSON.Should throw an error indicating so" time="0.0115" asserts="0" success="True" result="Success" executed="True" />
-                </results>
-              </test-suite>
-              <test-suite type="TestFixture" name="Test-RunbookFile.When the file doesn't adhere to the runbook JSON schema" executed="True" result="Success" success="True" time="0.0568" asserts="0" description="Test-RunbookFile.When the file doesn't adhere to the runbook JSON schema">
-                <results>
-                  <test-case description="Should throw an error indicating so" name="Test-RunbookFile.When the file doesn't adhere to the runbook JSON schema.Should throw an error indicating so" time="0.0159" asserts="0" success="True" result="Success" executed="True" />
-                </results>
-              </test-suite>
-              <test-suite type="TestFixture" name="Test-RunbookFile.When there are no [selectors] defined" executed="True" result="Success" success="True" time="0.0889" asserts="0" description="Test-RunbookFile.When there are no [selectors] defined">
-                <results>
-                  <test-case description="Should throw an error indicating so" name="Test-RunbookFile.When there are no [selectors] defined.Should throw an error indicating so" time="0.0183" asserts="0" success="True" result="Success" executed="True" />
-                </results>
-              </test-suite>
-              <test-suite type="TestFixture" name="Test-RunbookFile.When there are no [checks] defined" executed="True" result="Success" success="True" time="0.1124" asserts="0" description="Test-RunbookFile.When there are no [checks] defined">
-                <results>
-                  <test-case description="Should throw an error indicating so" name="Test-RunbookFile.When there are no [checks] defined.Should throw an error indicating so" time="0.0131" asserts="0" success="True" result="Success" executed="True" />
-                </results>
-              </test-suite>
-              <test-suite type="TestFixture" name="Test-RunbookFile.When a check references an undeclared selector" executed="True" result="Success" success="True" time="0.134" asserts="0" description="Test-RunbookFile.When a check references an undeclared selector">
-                <results>
-                  <test-case description="Should throw an error indicating so" name="Test-RunbookFile.When a check references an undeclared selector.Should throw an error indicating so" time="0.0118" asserts="0" success="True" result="Success" executed="True" />
-                </results>
-              </test-suite>
-            </results>
-          </test-suite>
-          <test-suite type="TestFixture" name="Build-RunbookQueries" executed="True" result="Success" success="True" time="0.8351" asserts="0" description="Build-RunbookQueries">
-            <results>
-              <test-suite type="TestFixture" name="Build-RunbookQueries.When provided with a valid runbook and corresponding recommendations" executed="True" result="Success" success="True" time="0.1043" asserts="0" description="Build-RunbookQueries.When provided with a valid runbook and corresponding recommendations">
-                <results>
-                  <test-case description="Should build a query for each check defined in the runbook" name="Build-RunbookQueries.When provided with a valid runbook and corresponding recommendations.Should build a query for each check defined in the runbook" time="0.0943" asserts="0" success="True" result="Success" executed="True" />
-                </results>
-              </test-suite>
-              <test-suite type="TestFixture" name="Build-RunbookQueries.When provided with an invalid runbook due to an unknown recommendation" executed="True" result="Success" success="True" time="0.148" asserts="0" description="Build-RunbookQueries.When provided with an invalid runbook due to an unknown recommendation">
-                <results>
-                  <test-case description="Should throw an error indicating so" name="Build-RunbookQueries.When provided with an invalid runbook due to an unknown recommendation.Should throw an error indicating so" time="0.032" asserts="0" success="True" result="Success" executed="True" />
-                </results>
-              </test-suite>
-            </results>
-          </test-suite>
-          <test-suite type="TestFixture" name="Read-RunbookFile" executed="True" result="Success" success="True" time="0.9249" asserts="0" description="Read-RunbookFile">
-            <results>
-              <test-suite type="TestFixture" name="Read-RunbookFile.When provided with a valid runbook file" executed="True" result="Success" success="True" time="0.0793" asserts="0" description="Read-RunbookFile.When provided with a valid runbook file">
-                <results>
-                  <test-case description="Should return a corresponding Runbook object" name="Read-RunbookFile.When provided with a valid runbook file.Should return a corresponding Runbook object" time="0.0693" asserts="0" success="True" result="Success" executed="True" />
-                </results>
-              </test-suite>
-            </results>
-          </test-suite>
-          <test-suite type="TestFixture" name="Write-RunbookFile" executed="True" result="Success" success="True" time="1.1679" asserts="0" description="Write-RunbookFile">
-            <results>
-              <test-suite type="TestFixture" name="Write-RunbookFile.When provided with a valid Runbook object" executed="True" result="Success" success="True" time="0.1841" asserts="0" description="Write-RunbookFile.When provided with a valid Runbook object">
-                <results>
-                  <test-case description="Should write the Runbook to a file" name="Write-RunbookFile.When provided with a valid Runbook object.Should write the Runbook to a file" time="0.1651" asserts="0" success="True" result="Success" executed="True" />
-                </results>
-              </test-suite>
-              <test-suite type="TestFixture" name="Write-RunbookFile.When provided withan invalid Runbook object" executed="True" result="Success" success="True" time="0.2239" asserts="0" description="Write-RunbookFile.When provided withan invalid Runbook object">
-                <results>
-                  <test-case description="Should throw an error indicating so" name="Write-RunbookFile.When provided withan invalid Runbook object.Should throw an error indicating so" time="0.0187" asserts="0" success="True" result="Success" executed="True" />
-                </results>
-              </test-suite>
-            </results>
-          </test-suite>
-          <test-suite type="TestFixture" name="Build-RunbookSelectorReview" executed="True" result="Success" success="True" time="1.4159" asserts="0" description="Build-RunbookSelectorReview">
-            <results>
-              <test-suite type="TestFixture" name="Build-RunbookSelectorReview.When provided with a valid runbook" executed="True" result="Success" success="True" time="0.2233" asserts="0" description="Build-RunbookSelectorReview.When provided with a valid runbook">
-                <results>
-                  <test-case description="Should list all selectors and corresponding selected resources" name="Build-RunbookSelectorReview.When provided with a valid runbook.Should list all selectors and corresponding selected resources" time="0.151" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should return a RetirementObject" name="Get-WAFResourceRetirement.When to get RetirementObjects.Should return a RetirementObject" time="0.2515" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should return multiple RetirementObjects" name="Get-WAFResourceRetirement.When to get RetirementObjects.Should return multiple RetirementObjects" time="0.1286" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
             </results>
           </test-suite>
         </results>
       </test-suite>
-      <test-suite type="TestFixture" name="C:\Users\hanxia\repos\Well-Architected-Reliability-Assessment\src\tests\scope\scope.tests.ps1" executed="True" result="Success" success="True" time="0.7837" asserts="0" description="C:\Users\hanxia\repos\Well-Architected-Reliability-Assessment\src\tests\scope\scope.tests.ps1">
+      <test-suite type="TestFixture" name="C:\Users\hanxia\repos\Well-Architected-Reliability-Assessment\src\tests\runbook\runbook.tests.ps1" executed="True" result="Success" success="True" time="6.4623" asserts="0" description="C:\Users\hanxia\repos\Well-Architected-Reliability-Assessment\src\tests\runbook\runbook.tests.ps1">
         <results>
-          <test-suite type="TestFixture" name="Get-WAFSubscriptionsByList" executed="True" result="Success" success="True" time="0.0582" asserts="0" description="Get-WAFSubscriptionsByList">
+          <test-suite type="TestFixture" name="Get-RunbookSchema" executed="True" result="Success" success="True" time="0.1596" asserts="0" description="Get-RunbookSchema">
             <results>
-              <test-suite type="TestFixture" name="Get-WAFSubscriptionsByList.When given a valid list of subscriptions" executed="True" result="Success" success="True" time="0.0428" asserts="0" description="Get-WAFSubscriptionsByList.When given a valid list of subscriptions">
+              <test-case description="Should return the runbook JSON schema" name="Get-RunbookSchema.Should return the runbook JSON schema" time="0.1495" asserts="0" success="True" result="Success" executed="True" />
+            </results>
+          </test-suite>
+          <test-suite type="TestFixture" name="New-RunbookCheckSet" executed="True" result="Success" success="True" time="0.2098" asserts="0" description="New-RunbookCheckSet">
+            <results>
+              <test-case description="Should return a new RunbookCheckSet object" name="New-RunbookCheckSet.Should return a new RunbookCheckSet object" time="0.0398" asserts="0" success="True" result="Success" executed="True" />
+            </results>
+          </test-suite>
+          <test-suite type="TestFixture" name="New-RunbookCheck" executed="True" result="Success" success="True" time="0.2812" asserts="0" description="New-RunbookCheck">
+            <results>
+              <test-case description="Should return a new RunbookCheck object" name="New-RunbookCheck.Should return a new RunbookCheck object" time="0.0497" asserts="0" success="True" result="Success" executed="True" />
+            </results>
+          </test-suite>
+          <test-suite type="TestFixture" name="New-RunbookRecommendation" executed="True" result="Success" success="True" time="0.3369" asserts="0" description="New-RunbookRecommendation">
+            <results>
+              <test-case description="Should return a new RunbookRecommendation object" name="New-RunbookRecommendation.Should return a new RunbookRecommendation object" time="0.0432" asserts="0" success="True" result="Success" executed="True" />
+            </results>
+          </test-suite>
+          <test-suite type="TestFixture" name="New-Runbook" executed="True" result="Success" success="True" time="0.9116" asserts="0" description="New-Runbook">
+            <results>
+              <test-suite type="TestFixture" name="New-Runbook.When provided with runbook JSON contents" executed="True" result="Success" success="True" time="0.0921" asserts="0" description="New-Runbook.When provided with runbook JSON contents">
                 <results>
-                  <test-case description="Should return the corresponding subscriptions" name="Get-WAFSubscriptionsByList.When given a valid list of subscriptions.Should return the corresponding subscriptions" time="0.0164" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should return a corresponding Runbook object" name="New-Runbook.When provided with runbook JSON contents.Should return a corresponding Runbook object" time="0.0843" asserts="0" success="True" result="Success" executed="True" />
+                </results>
+              </test-suite>
+              <test-suite type="TestFixture" name="New-Runbook.When provided with runbook JSON file path" executed="True" result="Success" success="True" time="0.2546" asserts="0" description="New-Runbook.When provided with runbook JSON file path">
+                <results>
+                  <test-case description="Should return a corresponding Runbook object" name="New-Runbook.When provided with runbook JSON file path.Should return a corresponding Runbook object" time="0.1538" asserts="0" success="True" result="Success" executed="True" />
+                </results>
+              </test-suite>
+              <test-suite type="TestFixture" name="New-Runbook.When provided with invalid runobok JSON file path" executed="True" result="Success" success="True" time="0.4142" asserts="0" description="New-Runbook.When provided with invalid runobok JSON file path">
+                <results>
+                  <test-case description="Should throw an error indicating that the file is invalid" name="New-Runbook.When provided with invalid runobok JSON file path.Should throw an error indicating that the file is invalid" time="0.1319" asserts="0" success="True" result="Success" executed="True" />
+                </results>
+              </test-suite>
+              <test-suite type="TestFixture" name="New-Runbook.When provided with both runbook JSON contents and file path" executed="True" result="Success" success="True" time="0.5181" asserts="0" description="New-Runbook.When provided with both runbook JSON contents and file path">
+                <results>
+                  <test-case description="Should throw an error indicating that both parameters can not be used at the same time" name="New-Runbook.When provided with both runbook JSON contents and file path.Should throw an error indicating that both parameters can not be used at the same time" time="0.092" asserts="0" success="True" result="Success" executed="True" />
+                </results>
+              </test-suite>
+              <test-suite type="TestFixture" name="New-Runbook.When no parameters are provided" executed="True" result="Success" success="True" time="0.5657" asserts="0" description="New-Runbook.When no parameters are provided">
+                <results>
+                  <test-case description="Should return a new Runbook" name="New-Runbook.When no parameters are provided.Should return a new Runbook" time="0.0391" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
             </results>
           </test-suite>
-          <test-suite type="TestFixture" name="Get-WAFResourceGroupsByList" executed="True" result="Success" success="True" time="0.1007" asserts="0" description="Get-WAFResourceGroupsByList">
+          <test-suite type="TestFixture" name="Test-RunbookFile" executed="True" result="Success" success="True" time="1.3175" asserts="0" description="Test-RunbookFile">
             <results>
-              <test-suite type="TestFixture" name="Get-WAFResourceGroupsByList.When given a valid list of resource groups" executed="True" result="Success" success="True" time="0.028" asserts="0" description="Get-WAFResourceGroupsByList.When given a valid list of resource groups">
+              <test-suite type="TestFixture" name="Test-RunbookFile.When the file doesn't contain valid JSON" executed="True" result="Success" success="True" time="0.0572" asserts="0" description="Test-RunbookFile.When the file doesn't contain valid JSON">
                 <results>
-                  <test-case description="Should return the corresponding resource ids that match the resource groups" name="Get-WAFResourceGroupsByList.When given a valid list of resource groups.Should return the corresponding resource ids that match the resource groups" time="0.0121" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should throw an error indicating so" name="Test-RunbookFile.When the file doesn't contain valid JSON.Should throw an error indicating so" time="0.0493" asserts="0" success="True" result="Success" executed="True" />
+                </results>
+              </test-suite>
+              <test-suite type="TestFixture" name="Test-RunbookFile.When the file doesn't adhere to the runbook JSON schema" executed="True" result="Success" success="True" time="0.177" asserts="0" description="Test-RunbookFile.When the file doesn't adhere to the runbook JSON schema">
+                <results>
+                  <test-case description="Should throw an error indicating so" name="Test-RunbookFile.When the file doesn't adhere to the runbook JSON schema.Should throw an error indicating so" time="0.1121" asserts="0" success="True" result="Success" executed="True" />
+                </results>
+              </test-suite>
+              <test-suite type="TestFixture" name="Test-RunbookFile.When there are no [selectors] defined" executed="True" result="Success" success="True" time="0.2466" asserts="0" description="Test-RunbookFile.When there are no [selectors] defined">
+                <results>
+                  <test-case description="Should throw an error indicating so" name="Test-RunbookFile.When there are no [selectors] defined.Should throw an error indicating so" time="0.0615" asserts="0" success="True" result="Success" executed="True" />
+                </results>
+              </test-suite>
+              <test-suite type="TestFixture" name="Test-RunbookFile.When there are no [checks] defined" executed="True" result="Success" success="True" time="0.2958" asserts="0" description="Test-RunbookFile.When there are no [checks] defined">
+                <results>
+                  <test-case description="Should throw an error indicating so" name="Test-RunbookFile.When there are no [checks] defined.Should throw an error indicating so" time="0.0356" asserts="0" success="True" result="Success" executed="True" />
+                </results>
+              </test-suite>
+              <test-suite type="TestFixture" name="Test-RunbookFile.When a check references an undeclared selector" executed="True" result="Success" success="True" time="0.3936" asserts="0" description="Test-RunbookFile.When a check references an undeclared selector">
+                <results>
+                  <test-case description="Should throw an error indicating so" name="Test-RunbookFile.When a check references an undeclared selector.Should throw an error indicating so" time="0.0823" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
             </results>
           </test-suite>
-          <test-suite type="TestFixture" name="Get-WAFResourcesByList" executed="True" result="Success" success="True" time="0.1314" asserts="0" description="Get-WAFResourcesByList">
+          <test-suite type="TestFixture" name="Build-RunbookQueries" executed="True" result="Success" success="True" time="1.6413" asserts="0" description="Build-RunbookQueries">
             <results>
-              <test-suite type="TestFixture" name="Get-WAFResourcesByList.When given a valid list of resource ids" executed="True" result="Success" success="True" time="0.0205" asserts="0" description="Get-WAFResourcesByList.When given a valid list of resource ids">
+              <test-suite type="TestFixture" name="Build-RunbookQueries.When provided with a valid runbook and corresponding recommendations" executed="True" result="Success" success="True" time="0.1853" asserts="0" description="Build-RunbookQueries.When provided with a valid runbook and corresponding recommendations">
                 <results>
-                  <test-case description="Should return the corresponding resource ids that match the resource ids in the filter" name="Get-WAFResourcesByList.When given a valid list of resource ids.Should return the corresponding resource ids that match the resource ids in the filter" time="0.0104" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should build a query for each check defined in the runbook" name="Build-RunbookQueries.When provided with a valid runbook and corresponding recommendations.Should build a query for each check defined in the runbook" time="0.1777" asserts="0" success="True" result="Success" executed="True" />
+                </results>
+              </test-suite>
+              <test-suite type="TestFixture" name="Build-RunbookQueries.When provided with an invalid runbook due to an unknown recommendation" executed="True" result="Success" success="True" time="0.3159" asserts="0" description="Build-RunbookQueries.When provided with an invalid runbook due to an unknown recommendation">
+                <results>
+                  <test-case description="Should throw an error indicating so" name="Build-RunbookQueries.When provided with an invalid runbook due to an unknown recommendation.Should throw an error indicating so" time="0.1216" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
             </results>
           </test-suite>
-          <test-suite type="TestFixture" name="Get-WAFFilteredResourceList" executed="True" result="Success" success="True" time="0.3318" asserts="0" description="Get-WAFFilteredResourceList">
+          <test-suite type="TestFixture" name="Read-RunbookFile" executed="True" result="Success" success="True" time="1.7088" asserts="0" description="Read-RunbookFile">
             <results>
-              <test-suite type="TestFixture" name="Get-WAFFilteredResourceList.When given a valid list of resource ids, resource groups, and subscriptions it should filter the list and only return resourceids that are in scope." executed="True" result="Success" success="True" time="0.0233" asserts="0" description="Get-WAFFilteredResourceList.When given a valid list of resource ids, resource groups, and subscriptions it should filter the list and only return resourceids that are in scope.">
+              <test-suite type="TestFixture" name="Read-RunbookFile.When provided with a valid runbook file" executed="True" result="Success" success="True" time="0.0601" asserts="0" description="Read-RunbookFile.When provided with a valid runbook file">
                 <results>
-                  <test-case description="Should return the corresponding resource ids that match the resource ids" name="Get-WAFFilteredResourceList.When given a valid list of resource ids, resource groups, and subscriptions it should filter the list and only return resourceids that are in scope..Should return the corresponding resource ids that match the resource ids" time="0.0144" asserts="0" success="True" result="Success" executed="True" />
-                </results>
-              </test-suite>
-              <test-suite type="TestFixture" name="Get-WAFFilteredResourceList.For Advisor recommendations, When given a valid list of resource ids, resource groups, and subscriptions it should filter the list and only return resourceids that are in scope." executed="True" result="Success" success="True" time="0.1901" asserts="0" description="Get-WAFFilteredResourceList.For Advisor recommendations, When given a valid list of resource ids, resource groups, and subscriptions it should filter the list and only return resourceids that are in scope.">
-                <results>
-                  <test-case description="Should return the corresponding advisor recommendations that match the resource ids" name="Get-WAFFilteredResourceList.For Advisor recommendations, When given a valid list of resource ids, resource groups, and subscriptions it should filter the list and only return resourceids that are in scope..Should return the corresponding advisor recommendations that match the resource ids" time="0.1504" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should return a corresponding Runbook object" name="Read-RunbookFile.When provided with a valid runbook file.Should return a corresponding Runbook object" time="0.0528" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
             </results>
           </test-suite>
-          <test-suite type="TestFixture" name="Get-WAFImplicitSubscriptionId" executed="True" result="Success" success="True" time="0.5038" asserts="0" description="Get-WAFImplicitSubscriptionId">
+          <test-suite type="TestFixture" name="Write-RunbookFile" executed="True" result="Success" success="True" time="1.9741" asserts="0" description="Write-RunbookFile">
             <results>
-              <test-suite type="TestFixture" name="Get-WAFImplicitSubscriptionId.When given valid subscription, resource group, and resource filters" executed="True" result="Success" success="True" time="0.0454" asserts="0" description="Get-WAFImplicitSubscriptionId.When given valid subscription, resource group, and resource filters">
+              <test-suite type="TestFixture" name="Write-RunbookFile.When provided with a valid Runbook object" executed="True" result="Success" success="True" time="0.1675" asserts="0" description="Write-RunbookFile.When provided with a valid Runbook object">
                 <results>
-                  <test-case description="Should return a unique list of subscription IDs" name="Get-WAFImplicitSubscriptionId.When given valid subscription, resource group, and resource filters.Should return a unique list of subscription IDs" time="0.029" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should write the Runbook to a file" name="Write-RunbookFile.When provided with a valid Runbook object.Should write the Runbook to a file" time="0.1552" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
-              <test-suite type="TestFixture" name="Get-WAFImplicitSubscriptionId.When given empty filters" executed="True" result="Success" success="True" time="0.0654" asserts="0" description="Get-WAFImplicitSubscriptionId.When given empty filters">
+              <test-suite type="TestFixture" name="Write-RunbookFile.When provided withan invalid Runbook object" executed="True" result="Success" success="True" time="0.2492" asserts="0" description="Write-RunbookFile.When provided withan invalid Runbook object">
                 <results>
-                  <test-case description="Should return an empty list" name="Get-WAFImplicitSubscriptionId.When given empty filters.Should return an empty list" time="0.0082" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should throw an error indicating so" name="Write-RunbookFile.When provided withan invalid Runbook object.Should throw an error indicating so" time="0.0695" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
-              <test-suite type="TestFixture" name="Get-WAFImplicitSubscriptionId.When given only subscription filters" executed="True" result="Success" success="True" time="0.1036" asserts="0" description="Get-WAFImplicitSubscriptionId.When given only subscription filters">
+            </results>
+          </test-suite>
+          <test-suite type="TestFixture" name="Build-RunbookSelectorReview" executed="True" result="Success" success="True" time="2.2138" asserts="0" description="Build-RunbookSelectorReview">
+            <results>
+              <test-suite type="TestFixture" name="Build-RunbookSelectorReview.When provided with a valid runbook" executed="True" result="Success" success="True" time="0.2295" asserts="0" description="Build-RunbookSelectorReview.When provided with a valid runbook">
                 <results>
-                  <test-case description="Should return the subscription IDs from the subscription filters" name="Get-WAFImplicitSubscriptionId.When given only subscription filters.Should return the subscription IDs from the subscription filters" time="0.0164" asserts="0" success="True" result="Success" executed="True" />
-                </results>
-              </test-suite>
-              <test-suite type="TestFixture" name="Get-WAFImplicitSubscriptionId.When given only resource group filters" executed="True" result="Success" success="True" time="0.1286" asserts="0" description="Get-WAFImplicitSubscriptionId.When given only resource group filters">
-                <results>
-                  <test-case description="Should return the subscription IDs from the resource group filters" name="Get-WAFImplicitSubscriptionId.When given only resource group filters.Should return the subscription IDs from the resource group filters" time="0.0119" asserts="0" success="True" result="Success" executed="True" />
-                </results>
-              </test-suite>
-              <test-suite type="TestFixture" name="Get-WAFImplicitSubscriptionId.When given only resource filters" executed="True" result="Success" success="True" time="0.1536" asserts="0" description="Get-WAFImplicitSubscriptionId.When given only resource filters">
-                <results>
-                  <test-case description="Should return the subscription IDs from the resource filters" name="Get-WAFImplicitSubscriptionId.When given only resource filters.Should return the subscription IDs from the resource filters" time="0.0117" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should list all selectors and corresponding selected resources" name="Build-RunbookSelectorReview.When provided with a valid runbook.Should list all selectors and corresponding selected resources" time="0.219" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
             </results>
           </test-suite>
         </results>
       </test-suite>
-      <test-suite type="TestFixture" name="C:\Users\hanxia\repos\Well-Architected-Reliability-Assessment\src\tests\servicehealth\servicehealth.tests.ps1" executed="True" result="Success" success="True" time="0.6351" asserts="0" description="C:\Users\hanxia\repos\Well-Architected-Reliability-Assessment\src\tests\servicehealth\servicehealth.tests.ps1">
+      <test-suite type="TestFixture" name="C:\Users\hanxia\repos\Well-Architected-Reliability-Assessment\src\tests\scope\scope.tests.ps1" executed="True" result="Success" success="True" time="1.6161" asserts="0" description="C:\Users\hanxia\repos\Well-Architected-Reliability-Assessment\src\tests\scope\scope.tests.ps1">
         <results>
-          <test-suite type="TestFixture" name="Get-WAFServiceHealth" executed="True" result="Success" success="True" time="0.1691" asserts="0" description="Get-WAFServiceHealth">
+          <test-suite type="TestFixture" name="Get-WAFSubscriptionsByList" executed="True" result="Success" success="True" time="0.0584" asserts="0" description="Get-WAFSubscriptionsByList">
             <results>
-              <test-suite type="TestFixture" name="Get-WAFServiceHealth.When the function is called and mocked with test data" executed="True" result="Success" success="True" time="0.1576" asserts="0" description="Get-WAFServiceHealth.When the function is called and mocked with test data">
+              <test-suite type="TestFixture" name="Get-WAFSubscriptionsByList.When given a valid list of subscriptions" executed="True" result="Success" success="True" time="0.0508" asserts="0" description="Get-WAFSubscriptionsByList.When given a valid list of subscriptions">
                 <results>
-                  <test-case description="Should return a valid list of ServiceHealthAlert objects" name="Get-WAFServiceHealth.When the function is called and mocked with test data.Should return a valid list of ServiceHealthAlert objects" time="0.1436" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should return the corresponding subscriptions" name="Get-WAFSubscriptionsByList.When given a valid list of subscriptions.Should return the corresponding subscriptions" time="0.0424" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
             </results>
           </test-suite>
-          <test-suite type="TestFixture" name="Build-WAFServiceHealthObject" executed="True" result="Success" success="True" time="0.2419" asserts="0" description="Build-WAFServiceHealthObject">
+          <test-suite type="TestFixture" name="Get-WAFResourceGroupsByList" executed="True" result="Success" success="True" time="0.1036" asserts="0" description="Get-WAFResourceGroupsByList">
             <results>
-              <test-suite type="TestFixture" name="Build-WAFServiceHealthObject.When the function is called with a valid query result" executed="True" result="Success" success="True" time="0.0603" asserts="0" description="Build-WAFServiceHealthObject.When the function is called with a valid query result">
+              <test-suite type="TestFixture" name="Get-WAFResourceGroupsByList.When given a valid list of resource groups" executed="True" result="Success" success="True" time="0.0353" asserts="0" description="Get-WAFResourceGroupsByList.When given a valid list of resource groups">
                 <results>
-                  <test-case description="Should return a list of ServiceHealthAlert objects" name="Build-WAFServiceHealthObject.When the function is called with a valid query result.Should return a list of ServiceHealthAlert objects" time="0.0206" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="Should contain the following counts of properties - EventType" name="Build-WAFServiceHealthObject.When the function is called with a valid query result.Should contain the following counts of properties - EventType" time="0.0261" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should return the corresponding resource ids that match the resource groups" name="Get-WAFResourceGroupsByList.When given a valid list of resource groups.Should return the corresponding resource ids that match the resource groups" time="0.0274" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
             </results>
           </test-suite>
-          <test-suite type="TestFixture" name="ServiceHealthAlert" executed="True" result="Success" success="True" time="0.3796" asserts="0" description="ServiceHealthAlert">
+          <test-suite type="TestFixture" name="Get-WAFResourcesByList" executed="True" result="Success" success="True" time="0.1506" asserts="0" description="Get-WAFResourcesByList">
             <results>
-              <test-suite type="TestFixture" name="ServiceHealthAlert.When the class is called with a valid query result" executed="True" result="Success" success="True" time="0.0691" asserts="0" description="ServiceHealthAlert.When the class is called with a valid query result">
+              <test-suite type="TestFixture" name="Get-WAFResourcesByList.When given a valid list of resource ids" executed="True" result="Success" success="True" time="0.0389" asserts="0" description="Get-WAFResourcesByList.When given a valid list of resource ids">
                 <results>
-                  <test-case description="Should return a valid ServiceHealthAlert object" name="ServiceHealthAlert.When the class is called with a valid query result.Should return a valid ServiceHealthAlert object" time="0.0541" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should return the corresponding resource ids that match the resource ids in the filter" name="Get-WAFResourcesByList.When given a valid list of resource ids.Should return the corresponding resource ids that match the resource ids in the filter" time="0.0301" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
-              <test-suite type="TestFixture" name="ServiceHealthAlert.When the class methods are called with a valid query result" executed="True" result="Success" success="True" time="0.1242" asserts="0" description="ServiceHealthAlert.When the class methods are called with a valid query result">
+            </results>
+          </test-suite>
+          <test-suite type="TestFixture" name="Get-WAFFilteredResourceList" executed="True" result="Success" success="True" time="0.3974" asserts="0" description="Get-WAFFilteredResourceList">
+            <results>
+              <test-suite type="TestFixture" name="Get-WAFFilteredResourceList.When given a valid list of resource ids, resource groups, and subscriptions it should filter the list and only return resourceids that are in scope." executed="True" result="Success" success="True" time="0.0481" asserts="0" description="Get-WAFFilteredResourceList.When given a valid list of resource ids, resource groups, and subscriptions it should filter the list and only return resourceids that are in scope.">
                 <results>
-                  <test-case description="[ServiceHealthAlert]::GetEventType() should return a valid EventType" name="ServiceHealthAlert.When the class methods are called with a valid query result.[ServiceHealthAlert]::GetEventType() should return a valid EventType" time="0.0076" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="[ServiceHealthAlert]::GetServices() should return a valid Services" name="ServiceHealthAlert.When the class methods are called with a valid query result.[ServiceHealthAlert]::GetServices() should return a valid Services" time="0.0104" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="[ServiceHealthAlert]::GetRegions() should return a valid Regions" name="ServiceHealthAlert.When the class methods are called with a valid query result.[ServiceHealthAlert]::GetRegions() should return a valid Regions" time="0.0104" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="[ServiceHealthAlert]::GetActionGroupName() should return a valid ActionGroupName" name="ServiceHealthAlert.When the class methods are called with a valid query result.[ServiceHealthAlert]::GetActionGroupName() should return a valid ActionGroupName" time="0.0066" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should return the corresponding resource ids that match the resource ids" name="Get-WAFFilteredResourceList.When given a valid list of resource ids, resource groups, and subscriptions it should filter the list and only return resourceids that are in scope..Should return the corresponding resource ids that match the resource ids" time="0.0411" asserts="0" success="True" result="Success" executed="True" />
+                </results>
+              </test-suite>
+              <test-suite type="TestFixture" name="Get-WAFFilteredResourceList.For Advisor recommendations, When given a valid list of resource ids, resource groups, and subscriptions it should filter the list and only return resourceids that are in scope." executed="True" result="Success" success="True" time="0.2389" asserts="0" description="Get-WAFFilteredResourceList.For Advisor recommendations, When given a valid list of resource ids, resource groups, and subscriptions it should filter the list and only return resourceids that are in scope.">
+                <results>
+                  <test-case description="Should return the corresponding advisor recommendations that match the resource ids" name="Get-WAFFilteredResourceList.For Advisor recommendations, When given a valid list of resource ids, resource groups, and subscriptions it should filter the list and only return resourceids that are in scope..Should return the corresponding advisor recommendations that match the resource ids" time="0.1831" asserts="0" success="True" result="Success" executed="True" />
+                </results>
+              </test-suite>
+            </results>
+          </test-suite>
+          <test-suite type="TestFixture" name="Get-WAFImplicitSubscriptionId" executed="True" result="Success" success="True" time="0.7222" asserts="0" description="Get-WAFImplicitSubscriptionId">
+            <results>
+              <test-suite type="TestFixture" name="Get-WAFImplicitSubscriptionId.When given valid subscription, resource group, and resource filters" executed="True" result="Success" success="True" time="0.0691" asserts="0" description="Get-WAFImplicitSubscriptionId.When given valid subscription, resource group, and resource filters">
+                <results>
+                  <test-case description="Should return a unique list of subscription IDs" name="Get-WAFImplicitSubscriptionId.When given valid subscription, resource group, and resource filters.Should return a unique list of subscription IDs" time="0.06" asserts="0" success="True" result="Success" executed="True" />
+                </results>
+              </test-suite>
+              <test-suite type="TestFixture" name="Get-WAFImplicitSubscriptionId.When given empty filters" executed="True" result="Success" success="True" time="0.1057" asserts="0" description="Get-WAFImplicitSubscriptionId.When given empty filters">
+                <results>
+                  <test-case description="Should return an empty list" name="Get-WAFImplicitSubscriptionId.When given empty filters.Should return an empty list" time="0.0241" asserts="0" success="True" result="Success" executed="True" />
+                </results>
+              </test-suite>
+              <test-suite type="TestFixture" name="Get-WAFImplicitSubscriptionId.When given only subscription filters" executed="True" result="Success" success="True" time="0.2115" asserts="0" description="Get-WAFImplicitSubscriptionId.When given only subscription filters">
+                <results>
+                  <test-case description="Should return the subscription IDs from the subscription filters" name="Get-WAFImplicitSubscriptionId.When given only subscription filters.Should return the subscription IDs from the subscription filters" time="0.0778" asserts="0" success="True" result="Success" executed="True" />
+                </results>
+              </test-suite>
+              <test-suite type="TestFixture" name="Get-WAFImplicitSubscriptionId.When given only resource group filters" executed="True" result="Success" success="True" time="0.2802" asserts="0" description="Get-WAFImplicitSubscriptionId.When given only resource group filters">
+                <results>
+                  <test-case description="Should return the subscription IDs from the resource group filters" name="Get-WAFImplicitSubscriptionId.When given only resource group filters.Should return the subscription IDs from the resource group filters" time="0.0512" asserts="0" success="True" result="Success" executed="True" />
+                </results>
+              </test-suite>
+              <test-suite type="TestFixture" name="Get-WAFImplicitSubscriptionId.When given only resource filters" executed="True" result="Success" success="True" time="0.3171" asserts="0" description="Get-WAFImplicitSubscriptionId.When given only resource filters">
+                <results>
+                  <test-case description="Should return the subscription IDs from the resource filters" name="Get-WAFImplicitSubscriptionId.When given only resource filters.Should return the subscription IDs from the resource filters" time="0.0279" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
             </results>
           </test-suite>
         </results>
       </test-suite>
-      <test-suite type="TestFixture" name="C:\Users\hanxia\repos\Well-Architected-Reliability-Assessment\src\tests\support\support.tests.ps1" executed="True" result="Success" success="True" time="1.0149" asserts="0" description="C:\Users\hanxia\repos\Well-Architected-Reliability-Assessment\src\tests\support\support.tests.ps1">
+      <test-suite type="TestFixture" name="C:\Users\hanxia\repos\Well-Architected-Reliability-Assessment\src\tests\servicehealth\servicehealth.tests.ps1" executed="True" result="Success" success="True" time="1.5056" asserts="0" description="C:\Users\hanxia\repos\Well-Architected-Reliability-Assessment\src\tests\servicehealth\servicehealth.tests.ps1">
         <results>
-          <test-suite type="TestFixture" name="Get-WAFSupportTicket" executed="True" result="Success" success="True" time="0.1977" asserts="0" description="Get-WAFSupportTicket">
+          <test-suite type="TestFixture" name="Get-WAFServiceHealth" executed="True" result="Success" success="True" time="0.2892" asserts="0" description="Get-WAFServiceHealth">
             <results>
-              <test-suite type="TestFixture" name="Get-WAFSupportTicket.When to get SupportTicketObject" executed="True" result="Success" success="True" time="0.1887" asserts="0" description="Get-WAFSupportTicket.When to get SupportTicketObject">
+              <test-suite type="TestFixture" name="Get-WAFServiceHealth.When the function is called and mocked with test data" executed="True" result="Success" success="True" time="0.2778" asserts="0" description="Get-WAFServiceHealth.When the function is called and mocked with test data">
                 <results>
-                  <test-case description="Should return a SupportTicketObject" name="Get-WAFSupportTicket.When to get SupportTicketObject.Should return a SupportTicketObject" time="0.1012" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="Should return multiple SupportTicketObjects" name="Get-WAFSupportTicket.When to get SupportTicketObject.Should return multiple SupportTicketObjects" time="0.0766" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should return a valid list of ServiceHealthAlert objects" name="Get-WAFServiceHealth.When the function is called and mocked with test data.Should return a valid list of ServiceHealthAlert objects" time="0.2699" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
             </results>
           </test-suite>
-          <test-suite type="TestFixture" name="New-WAFSupportTicketObject" executed="True" result="Success" success="True" time="0.251" asserts="0" description="New-WAFSupportTicketObject">
+          <test-suite type="TestFixture" name="Build-WAFServiceHealthObject" executed="True" result="Success" success="True" time="0.4823" asserts="0" description="Build-WAFServiceHealthObject">
             <results>
-              <test-suite type="TestFixture" name="New-WAFSupportTicketObject.When to get a SupportTicketObject" executed="True" result="Success" success="True" time="0.0441" asserts="0" description="New-WAFSupportTicketObject.When to get a SupportTicketObject">
+              <test-suite type="TestFixture" name="Build-WAFServiceHealthObject.When the function is called with a valid query result" executed="True" result="Success" success="True" time="0.1846" asserts="0" description="Build-WAFServiceHealthObject.When the function is called with a valid query result">
                 <results>
-                  <test-case description="Should return a SupportTicketObject with resource ID" name="New-WAFSupportTicketObject.When to get a SupportTicketObject.Should return a SupportTicketObject with resource ID" time="0.0191" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="Should return a SupportTicketObject without resource ID" name="New-WAFSupportTicketObject.When to get a SupportTicketObject.Should return a SupportTicketObject without resource ID" time="0.0158" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should return a list of ServiceHealthAlert objects" name="Build-WAFServiceHealthObject.When the function is called with a valid query result.Should return a list of ServiceHealthAlert objects" time="0.0403" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should contain the following counts of properties - EventType" name="Build-WAFServiceHealthObject.When the function is called with a valid query result.Should contain the following counts of properties - EventType" time="0.1365" asserts="0" success="True" result="Success" executed="True" />
+                </results>
+              </test-suite>
+            </results>
+          </test-suite>
+          <test-suite type="TestFixture" name="ServiceHealthAlert" executed="True" result="Success" success="True" time="0.6888" asserts="0" description="ServiceHealthAlert">
+            <results>
+              <test-suite type="TestFixture" name="ServiceHealthAlert.When the class is called with a valid query result" executed="True" result="Success" success="True" time="0.0594" asserts="0" description="ServiceHealthAlert.When the class is called with a valid query result">
+                <results>
+                  <test-case description="Should return a valid ServiceHealthAlert object" name="ServiceHealthAlert.When the class is called with a valid query result.Should return a valid ServiceHealthAlert object" time="0.0525" asserts="0" success="True" result="Success" executed="True" />
+                </results>
+              </test-suite>
+              <test-suite type="TestFixture" name="ServiceHealthAlert.When the class methods are called with a valid query result" executed="True" result="Success" success="True" time="0.1993" asserts="0" description="ServiceHealthAlert.When the class methods are called with a valid query result">
+                <results>
+                  <test-case description="[ServiceHealthAlert]::GetEventType() should return a valid EventType" name="ServiceHealthAlert.When the class methods are called with a valid query result.[ServiceHealthAlert]::GetEventType() should return a valid EventType" time="0.0221" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="[ServiceHealthAlert]::GetServices() should return a valid Services" name="ServiceHealthAlert.When the class methods are called with a valid query result.[ServiceHealthAlert]::GetServices() should return a valid Services" time="0.0263" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="[ServiceHealthAlert]::GetRegions() should return a valid Regions" name="ServiceHealthAlert.When the class methods are called with a valid query result.[ServiceHealthAlert]::GetRegions() should return a valid Regions" time="0.0242" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="[ServiceHealthAlert]::GetActionGroupName() should return a valid ActionGroupName" name="ServiceHealthAlert.When the class methods are called with a valid query result.[ServiceHealthAlert]::GetActionGroupName() should return a valid ActionGroupName" time="0.021" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
             </results>
           </test-suite>
         </results>
       </test-suite>
-      <test-suite type="TestFixture" name="C:\Users\hanxia\repos\Well-Architected-Reliability-Assessment\src\tests\utils\utils.tests.ps1" executed="True" result="Success" success="True" time="1.1716" asserts="0" description="C:\Users\hanxia\repos\Well-Architected-Reliability-Assessment\src\tests\utils\utils.tests.ps1">
+      <test-suite type="TestFixture" name="C:\Users\hanxia\repos\Well-Architected-Reliability-Assessment\src\tests\support\support.tests.ps1" executed="True" result="Success" success="True" time="1.4123" asserts="0" description="C:\Users\hanxia\repos\Well-Architected-Reliability-Assessment\src\tests\support\support.tests.ps1">
         <results>
-          <test-suite type="TestFixture" name="Get-AzureRestMethodUriPath" executed="True" result="Success" success="True" time="0.0599" asserts="0" description="Get-AzureRestMethodUriPath">
+          <test-suite type="TestFixture" name="Get-WAFSupportTicket" executed="True" result="Success" success="True" time="0.4256" asserts="0" description="Get-WAFSupportTicket">
             <results>
-              <test-suite type="TestFixture" name="Get-AzureRestMethodUriPath.When to get an Azure REST API URI path" executed="True" result="Success" success="True" time="0.0467" asserts="0" description="Get-AzureRestMethodUriPath.When to get an Azure REST API URI path">
+              <test-suite type="TestFixture" name="Get-WAFSupportTicket.When to get SupportTicketObject" executed="True" result="Success" success="True" time="0.416" asserts="0" description="Get-WAFSupportTicket.When to get SupportTicketObject">
                 <results>
-                  <test-case description="Should return the path that does contains resource group" name="Get-AzureRestMethodUriPath.When to get an Azure REST API URI path.Should return the path that does contains resource group" time="0.0165" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="Should return the path that does contains resource group with query string" name="Get-AzureRestMethodUriPath.When to get an Azure REST API URI path.Should return the path that does contains resource group with query string" time="0.0071" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="Should return the path that does not contains resource group" name="Get-AzureRestMethodUriPath.When to get an Azure REST API URI path.Should return the path that does not contains resource group" time="0.0049" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="Should return the path that does not contains resource group with query string" name="Get-AzureRestMethodUriPath.When to get an Azure REST API URI path.Should return the path that does not contains resource group with query string" time="0.0055" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should return a SupportTicketObject" name="Get-WAFSupportTicket.When to get SupportTicketObject.Should return a SupportTicketObject" time="0.2209" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should return multiple SupportTicketObjects" name="Get-WAFSupportTicket.When to get SupportTicketObject.Should return multiple SupportTicketObjects" time="0.1628" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
             </results>
           </test-suite>
-          <test-suite type="TestFixture" name="Invoke-AzureRestApi" executed="True" result="Success" success="True" time="0.2372" asserts="0" description="Invoke-AzureRestApi">
+          <test-suite type="TestFixture" name="New-WAFSupportTicketObject" executed="True" result="Success" success="True" time="0.5244" asserts="0" description="New-WAFSupportTicketObject">
             <results>
-              <test-suite type="TestFixture" name="Invoke-AzureRestApi.When to invoke an Azure REST API with a path WITH resource group" executed="True" result="Success" success="True" time="0.0777" asserts="0" description="Invoke-AzureRestApi.When to invoke an Azure REST API with a path WITH resource group">
+              <test-suite type="TestFixture" name="New-WAFSupportTicketObject.When to get a SupportTicketObject" executed="True" result="Success" success="True" time="0.0916" asserts="0" description="New-WAFSupportTicketObject.When to get a SupportTicketObject">
                 <results>
-                  <test-case description="Should call Get-AzureRestMethodUriPath and Invoke-AzRestMethod then return the response from the Azure REST API" name="Invoke-AzureRestApi.When to invoke an Azure REST API with a path WITH resource group.Should call Get-AzureRestMethodUriPath and Invoke-AzRestMethod then return the response from the Azure REST API" time="0.0354" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="Should call Get-AzureRestMethodUriPath and Invoke-AzRestMethod then return the response from the Azure REST API with query string" name="Invoke-AzureRestApi.When to invoke an Azure REST API with a path WITH resource group.Should call Get-AzureRestMethodUriPath and Invoke-AzRestMethod then return the response from the Azure REST API with query string" time="0.0073" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="Should call Get-AzureRestMethodUriPath and Invoke-AzRestMethod then return the response from the Azure REST API with request body" name="Invoke-AzureRestApi.When to invoke an Azure REST API with a path WITH resource group.Should call Get-AzureRestMethodUriPath and Invoke-AzRestMethod then return the response from the Azure REST API with request body" time="0.0121" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="Should call Get-AzureRestMethodUriPath and Invoke-AzRestMethod then return the response from the Azure REST API with query string and request body" name="Invoke-AzureRestApi.When to invoke an Azure REST API with a path WITH resource group.Should call Get-AzureRestMethodUriPath and Invoke-AzRestMethod then return the response from the Azure REST API with query string and request body" time="0.0107" asserts="0" success="True" result="Success" executed="True" />
-                </results>
-              </test-suite>
-              <test-suite type="TestFixture" name="Invoke-AzureRestApi.When to invoke an Azure REST API with a path WITHOUT resource group" executed="True" result="Success" success="True" time="0.1417" asserts="0" description="Invoke-AzureRestApi.When to invoke an Azure REST API with a path WITHOUT resource group">
-                <results>
-                  <test-case description="Should call Get-AzureRestMethodUriPath and Invoke-AzRestMethod then return the response from the Azure REST API" name="Invoke-AzureRestApi.When to invoke an Azure REST API with a path WITHOUT resource group.Should call Get-AzureRestMethodUriPath and Invoke-AzRestMethod then return the response from the Azure REST API" time="0.0134" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="Should call Get-AzureRestMethodUriPath and Invoke-AzRestMethod then return the response from the Azure REST API with query string" name="Invoke-AzureRestApi.When to invoke an Azure REST API with a path WITHOUT resource group.Should call Get-AzureRestMethodUriPath and Invoke-AzRestMethod then return the response from the Azure REST API with query string" time="0.0115" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="Should call Get-AzureRestMethodUriPath and Invoke-AzRestMethod then return the response from the Azure REST API with request body" name="Invoke-AzureRestApi.When to invoke an Azure REST API with a path WITHOUT resource group.Should call Get-AzureRestMethodUriPath and Invoke-AzRestMethod then return the response from the Azure REST API with request body" time="0.0099" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="Should call Get-AzureRestMethodUriPath and Invoke-AzRestMethod then return the response from the Azure REST API with query string and request body" name="Invoke-AzureRestApi.When to invoke an Azure REST API with a path WITHOUT resource group.Should call Get-AzureRestMethodUriPath and Invoke-AzRestMethod then return the response from the Azure REST API with query string and request body" time="0.0126" asserts="0" success="True" result="Success" executed="True" />
-                </results>
-              </test-suite>
-            </results>
-          </test-suite>
-          <test-suite type="TestFixture" name="Import-WAFConfigFileData" executed="True" result="Success" success="True" time="0.3203" asserts="0" description="Import-WAFConfigFileData">
-            <results>
-              <test-suite type="TestFixture" name="Import-WAFConfigFileData.Import a WAF config file with valid and invalid data" executed="True" result="Success" success="True" time="0.0701" asserts="0" description="Import-WAFConfigFileData.Import a WAF config file with valid and invalid data">
-                <results>
-                  <test-case description="Should return the correct content of the WAF config file" name="Import-WAFConfigFileData.Import a WAF config file with valid and invalid data.Should return the correct content of the WAF config file" time="0.0583" asserts="0" success="True" result="Success" executed="True" />
-                </results>
-              </test-suite>
-            </results>
-          </test-suite>
-          <test-suite type="TestFixture" name="Connect-WAFAzure" executed="True" result="Success" success="True" time="0.5089" asserts="0" description="Connect-WAFAzure">
-            <results>
-              <test-suite type="TestFixture" name="Connect-WAFAzure.When TenantID is provided" executed="True" result="Success" success="True" time="0.1775" asserts="0" description="Connect-WAFAzure.When TenantID is provided">
-                <results>
-                  <test-case description="Should call Connect-AzAccount if Get-AzContext returns no context (There is no existing context)" name="Connect-WAFAzure.When TenantID is provided.Should call Connect-AzAccount if Get-AzContext returns no context (There is no existing context)" time="0.0539" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="Should call Connect-AzAccount if Get-AzContext returns a context of different tenant" name="Connect-WAFAzure.When TenantID is provided.Should call Connect-AzAccount if Get-AzContext returns a context of different tenant" time="0.0405" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="Should call Connect-AzAccount if Get-AzContext returns a context of different environment" name="Connect-WAFAzure.When TenantID is provided.Should call Connect-AzAccount if Get-AzContext returns a context of different environment" time="0.0325" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="Should not call Connect-AzAccount if Get-AzContext returns a context of the same tenant and the same environment" name="Connect-WAFAzure.When TenantID is provided.Should not call Connect-AzAccount if Get-AzContext returns a context of the same tenant and the same environment" time="0.0383" asserts="0" success="True" result="Success" executed="True" />
-                </results>
-              </test-suite>
-            </results>
-          </test-suite>
-          <test-suite type="TestFixture" name="Test-FileExists" executed="True" result="Success" success="True" time="0.5578" asserts="0" description="Test-FileExists">
-            <results>
-              <test-suite type="TestFixture" name="Test-FileExists.When given an existing file" executed="True" result="Success" success="True" time="0.0158" asserts="0" description="Test-FileExists.When given an existing file">
-                <results>
-                  <test-case description="Should return true" name="Test-FileExists.When given an existing file.Should return true" time="0.0052" asserts="0" success="True" result="Success" executed="True" />
-                </results>
-              </test-suite>
-              <test-suite type="TestFixture" name="Test-FileExists.When given a file that doesn't exist" executed="True" result="Success" success="True" time="0.0365" asserts="0" description="Test-FileExists.When given a file that doesn't exist">
-                <results>
-                  <test-case description="Should throw an error indicating so" name="Test-FileExists.When given a file that doesn't exist.Should throw an error indicating so" time="0.0083" asserts="0" success="True" result="Success" executed="True" />
-                </results>
-              </test-suite>
-            </results>
-          </test-suite>
-          <test-suite type="TestFixture" name="Test-WAFTagPattern" executed="True" result="Success" success="True" time="0.6108" asserts="0" description="Test-WAFTagPattern">
-            <results>
-              <test-suite type="TestFixture" name="Test-WAFTagPattern.When given a valid tag pattern" executed="True" result="Success" success="True" time="0.0151" asserts="0" description="Test-WAFTagPattern.When given a valid tag pattern">
-                <results>
-                  <test-case description="Should return true" name="Test-WAFTagPattern.When given a valid tag pattern.Should return true" time="0.005" asserts="0" success="True" result="Success" executed="True" />
-                </results>
-              </test-suite>
-              <test-suite type="TestFixture" name="Test-WAFTagPattern.When given an invalid tag pattern" executed="True" result="Success" success="True" time="0.0439" asserts="0" description="Test-WAFTagPattern.When given an invalid tag pattern">
-                <results>
-                  <test-case description="Should throw the exception" name="Test-WAFTagPattern.When given an invalid tag pattern.Should throw the exception" time="0.0191" asserts="0" success="True" result="Success" executed="True" />
-                </results>
-              </test-suite>
-            </results>
-          </test-suite>
-          <test-suite type="TestFixture" name="Test-WAFResourceGroupId" executed="True" result="Success" success="True" time="0.6866" asserts="0" description="Test-WAFResourceGroupId">
-            <results>
-              <test-suite type="TestFixture" name="Test-WAFResourceGroupId.When given a valid resource group id" executed="True" result="Success" success="True" time="0.0222" asserts="0" description="Test-WAFResourceGroupId.When given a valid resource group id">
-                <results>
-                  <test-case description="Should return true with a valid resource group id" name="Test-WAFResourceGroupId.When given a valid resource group id.Should return true with a valid resource group id" time="0.0072" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="Should return true when the resource group id contains a trailing slash" name="Test-WAFResourceGroupId.When given a valid resource group id.Should return true when the resource group id contains a trailing slash" time="0.0039" asserts="0" success="True" result="Success" executed="True" />
-                </results>
-              </test-suite>
-              <test-suite type="TestFixture" name="Test-WAFResourceGroupId.When given an invalid resource group id" executed="True" result="Success" success="True" time="0.0647" asserts="0" description="Test-WAFResourceGroupId.When given an invalid resource group id">
-                <results>
-                  <test-case description="Should throw the exception with a bad GUID" name="Test-WAFResourceGroupId.When given an invalid resource group id.Should throw the exception with a bad GUID" time="0.013" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="Should throw the exception with a bad resourceGroups typo - missing s" name="Test-WAFResourceGroupId.When given an invalid resource group id.Should throw the exception with a bad resourceGroups typo - missing s" time="0.0056" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="Should throw the exception with a bad subscription typo - missing s" name="Test-WAFResourceGroupId.When given an invalid resource group id.Should throw the exception with a bad subscription typo - missing s" time="0.0072" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="Should throw the exception when missing the leading slash" name="Test-WAFResourceGroupId.When given an invalid resource group id.Should throw the exception when missing the leading slash" time="0.0066" asserts="0" success="True" result="Success" executed="True" />
-                </results>
-              </test-suite>
-            </results>
-          </test-suite>
-          <test-suite type="TestFixture" name="Test-WAFSubscriptionId" executed="True" result="Success" success="True" time="0.7772" asserts="0" description="Test-WAFSubscriptionId">
-            <results>
-              <test-suite type="TestFixture" name="Test-WAFSubscriptionId.When given a valid subscription id" executed="True" result="Success" success="True" time="0.0322" asserts="0" description="Test-WAFSubscriptionId.When given a valid subscription id">
-                <results>
-                  <test-case description="Should return true with a valid subscription id" name="Test-WAFSubscriptionId.When given a valid subscription id.Should return true with a valid subscription id" time="0.0102" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="Should return true when the subscription id contains a trailing slash" name="Test-WAFSubscriptionId.When given a valid subscription id.Should return true when the subscription id contains a trailing slash" time="0.0085" asserts="0" success="True" result="Success" executed="True" />
-                </results>
-              </test-suite>
-              <test-suite type="TestFixture" name="Test-WAFSubscriptionId.When given an invalid subscription id" executed="True" result="Success" success="True" time="0.0776" asserts="0" description="Test-WAFSubscriptionId.When given an invalid subscription id">
-                <results>
-                  <test-case description="Should throw the exception with a bad GUID" name="Test-WAFSubscriptionId.When given an invalid subscription id.Should throw the exception with a bad GUID" time="0.0174" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="Should throw the exception with a bad subscription typo - missing s" name="Test-WAFSubscriptionId.When given an invalid subscription id.Should throw the exception with a bad subscription typo - missing s" time="0.0085" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="Should throw the exception when missing the leading slash" name="Test-WAFSubscriptionId.When given an invalid subscription id.Should throw the exception when missing the leading slash" time="0.0066" asserts="0" success="True" result="Success" executed="True" />
-                </results>
-              </test-suite>
-            </results>
-          </test-suite>
-          <test-suite type="TestFixture" name="Test-WAFIsGuid" executed="True" result="Success" success="True" time="0.851" asserts="0" description="Test-WAFIsGuid">
-            <results>
-              <test-suite type="TestFixture" name="Test-WAFIsGuid.When given a valid GUID" executed="True" result="Success" success="True" time="0.0248" asserts="0" description="Test-WAFIsGuid.When given a valid GUID">
-                <results>
-                  <test-case description="Should return true with a valid GUID" name="Test-WAFIsGuid.When given a valid GUID.Should return true with a valid GUID" time="0.0077" asserts="0" success="True" result="Success" executed="True" />
-                </results>
-              </test-suite>
-              <test-suite type="TestFixture" name="Test-WAFIsGuid.When given an invalid GUID" executed="True" result="Success" success="True" time="0.0592" asserts="0" description="Test-WAFIsGuid.When given an invalid GUID">
-                <results>
-                  <test-case description="Should throw the exception with a bad GUID" name="Test-WAFIsGuid.When given an invalid GUID.Should throw the exception with a bad GUID" time="0.0183" asserts="0" success="True" result="Success" executed="True" />
-                </results>
-              </test-suite>
-            </results>
-          </test-suite>
-          <test-suite type="TestFixture" name="Repair-WAFSubscriptionId" executed="True" result="Success" success="True" time="0.9403" asserts="0" description="Repair-WAFSubscriptionId">
-            <results>
-              <test-suite type="TestFixture" name="Repair-WAFSubscriptionId.When given a subscription id without /subscriptions/" executed="True" result="Success" success="True" time="0.0384" asserts="0" description="Repair-WAFSubscriptionId.When given a subscription id without /subscriptions/">
-                <results>
-                  <test-case description="Should return a subscription id with /subscriptions/" name="Repair-WAFSubscriptionId.When given a subscription id without /subscriptions/.Should return a subscription id with /subscriptions/" time="0.015" asserts="0" success="True" result="Success" executed="True" />
-                </results>
-              </test-suite>
-              <test-suite type="TestFixture" name="Repair-WAFSubscriptionId.When given two subscription ids, one with /subscriptions/ and one without" executed="True" result="Success" success="True" time="0.0716" asserts="0" description="Repair-WAFSubscriptionId.When given two subscription ids, one with /subscriptions/ and one without">
-                <results>
-                  <test-case description="Should return both subscription ids with /subscriptions/" name="Repair-WAFSubscriptionId.When given two subscription ids, one with /subscriptions/ and one without.Should return both subscription ids with /subscriptions/" time="0.0118" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should return a SupportTicketObject with resource ID" name="New-WAFSupportTicketObject.When to get a SupportTicketObject.Should return a SupportTicketObject with resource ID" time="0.0593" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should return a SupportTicketObject without resource ID" name="New-WAFSupportTicketObject.When to get a SupportTicketObject.Should return a SupportTicketObject without resource ID" time="0.0255" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
             </results>
           </test-suite>
         </results>
       </test-suite>
-      <test-suite type="TestFixture" name="C:\Users\hanxia\repos\Well-Architected-Reliability-Assessment\src\tests\wara\wara.tests.ps1" executed="True" result="Success" success="True" time="19.4335" asserts="0" description="C:\Users\hanxia\repos\Well-Architected-Reliability-Assessment\src\tests\wara\wara.tests.ps1">
+      <test-suite type="TestFixture" name="C:\Users\hanxia\repos\Well-Architected-Reliability-Assessment\src\tests\utils\topology-networkpath.tests.ps1" executed="True" result="Success" success="True" time="6.1474" asserts="0" description="C:\Users\hanxia\repos\Well-Architected-Reliability-Assessment\src\tests\utils\topology-networkpath.tests.ps1">
         <results>
-          <test-suite type="TestFixture" name="Start-WARACollector Parameter Sets" executed="True" result="Success" success="True" time="0.2142" asserts="0" description="Start-WARACollector Parameter Sets">
+          <test-suite type="TestFixture" name="Add-WAFResourceTopology - network path enrichment" executed="True" result="Success" success="True" time="5.9537" asserts="0" description="Add-WAFResourceTopology - network path enrichment">
             <results>
-              <test-suite type="TestFixture" name="Start-WARACollector Parameter Sets.ConfigFile" executed="True" result="Success" success="True" time="0.0834" asserts="0" description="Start-WARACollector Parameter Sets.ConfigFile">
+              <test-case description="Should enrich Load Balancer networking and backend relationships" name="Add-WAFResourceTopology - network path enrichment.Should enrich Load Balancer networking and backend relationships" time="2.6777" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="Should enrich ExpressRoute circuit to VNet gateway relationships" name="Add-WAFResourceTopology - network path enrichment.Should enrich ExpressRoute circuit to VNet gateway relationships" time="1.0671" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="Should fallback to Az.Network for Load Balancer when ARG returns empty" name="Add-WAFResourceTopology - network path enrichment.Should fallback to Az.Network for Load Balancer when ARG returns empty" time="0.6461" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="Should fallback to Az.Network for NAT Gateway when ARG returns empty" name="Add-WAFResourceTopology - network path enrichment.Should fallback to Az.Network for NAT Gateway when ARG returns empty" time="0.2779" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="Should fallback to Az.Network for Application Gateway when ARG returns empty" name="Add-WAFResourceTopology - network path enrichment.Should fallback to Az.Network for Application Gateway when ARG returns empty" time="0.1195" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="Should fallback to Az.Network for Azure Firewall when ARG returns empty" name="Add-WAFResourceTopology - network path enrichment.Should fallback to Az.Network for Azure Firewall when ARG returns empty" time="0.1155" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="Should fallback to Az.Network for Virtual Network Gateway when ARG returns empty" name="Add-WAFResourceTopology - network path enrichment.Should fallback to Az.Network for Virtual Network Gateway when ARG returns empty" time="0.1202" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="Should fallback to Az.Network for ExpressRoute connections when ARG returns empty" name="Add-WAFResourceTopology - network path enrichment.Should fallback to Az.Network for ExpressRoute connections when ARG returns empty" time="0.1083" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="Should fallback to Az.Network for ExpressRoute circuit list when ARG returns empty" name="Add-WAFResourceTopology - network path enrichment.Should fallback to Az.Network for ExpressRoute circuit list when ARG returns empty" time="0.0865" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="Should enrich NAT Gateway networking relationships" name="Add-WAFResourceTopology - network path enrichment.Should enrich NAT Gateway networking relationships" time="0.7275" asserts="0" success="True" result="Success" executed="True" />
+            </results>
+          </test-suite>
+        </results>
+      </test-suite>
+      <test-suite type="TestFixture" name="C:\Users\hanxia\repos\Well-Architected-Reliability-Assessment\src\tests\utils\topology-peering.tests.ps1" executed="True" result="Success" success="True" time="1.946" asserts="0" description="C:\Users\hanxia\repos\Well-Architected-Reliability-Assessment\src\tests\utils\topology-peering.tests.ps1">
+        <results>
+          <test-suite type="TestFixture" name="Add-WAFResourceTopology - VNet peering enrichment" executed="True" result="Success" success="True" time="1.7105" asserts="0" description="Add-WAFResourceTopology - VNet peering enrichment">
+            <results>
+              <test-case description="Should populate VNet peering fields for VNet resources" name="Add-WAFResourceTopology - VNet peering enrichment.Should populate VNet peering fields for VNet resources" time="0.8562" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="Should leave peering fields empty when no peerings exist" name="Add-WAFResourceTopology - VNet peering enrichment.Should leave peering fields empty when no peerings exist" time="0.8461" asserts="0" success="True" result="Success" executed="True" />
+            </results>
+          </test-suite>
+        </results>
+      </test-suite>
+      <test-suite type="TestFixture" name="C:\Users\hanxia\repos\Well-Architected-Reliability-Assessment\src\tests\utils\utils.tests.ps1" executed="True" result="Success" success="True" time="2.708" asserts="0" description="C:\Users\hanxia\repos\Well-Architected-Reliability-Assessment\src\tests\utils\utils.tests.ps1">
+        <results>
+          <test-suite type="TestFixture" name="Get-AzureRestMethodUriPath" executed="True" result="Success" success="True" time="0.135" asserts="0" description="Get-AzureRestMethodUriPath">
+            <results>
+              <test-suite type="TestFixture" name="Get-AzureRestMethodUriPath.When to get an Azure REST API URI path" executed="True" result="Success" success="True" time="0.1278" asserts="0" description="Get-AzureRestMethodUriPath.When to get an Azure REST API URI path">
                 <results>
-                  <test-case description="Should proceed when used alone." name="Start-WARACollector Parameter Sets.ConfigFile.Should proceed when used alone." time="0.0667" asserts="0" success="True" result="Success" executed="True" />
-                </results>
-              </test-suite>
-              <test-suite type="TestFixture" name="Start-WARACollector Parameter Sets.ConfigFile + Specialized" executed="True" result="Success" success="True" time="0.1174" asserts="0" description="Start-WARACollector Parameter Sets.ConfigFile + Specialized">
-                <results>
-                  <test-case description="Should proceed with ConfigFile + Specialized." name="Start-WARACollector Parameter Sets.ConfigFile + Specialized.Should proceed with ConfigFile + Specialized." time="0.0208" asserts="0" success="True" result="Success" executed="True" />
-                </results>
-              </test-suite>
-              <test-suite type="TestFixture" name="Start-WARACollector Parameter Sets.TenantId + SubscriptionIds" executed="True" result="Success" success="True" time="0.1439" asserts="0" description="Start-WARACollector Parameter Sets.TenantId + SubscriptionIds">
-                <results>
-                  <test-case description="Should proceed with TenantId + SubscriptionIds" name="Start-WARACollector Parameter Sets.TenantId + SubscriptionIds.Should proceed with TenantId + SubscriptionIds" time="0.0155" asserts="0" success="True" result="Success" executed="True" />
-                </results>
-              </test-suite>
-              <test-suite type="TestFixture" name="Start-WARACollector Parameter Sets.TenantId + SubscriptionIds + ResourceGroups" executed="True" result="Success" success="True" time="0.1714" asserts="0" description="Start-WARACollector Parameter Sets.TenantId + SubscriptionIds + ResourceGroups">
-                <results>
-                  <test-case description="Should proceed with TenantId + SubscriptionIds + ResourceGroups" name="Start-WARACollector Parameter Sets.TenantId + SubscriptionIds + ResourceGroups.Should proceed with TenantId + SubscriptionIds + ResourceGroups" time="0.0098" asserts="0" success="True" result="Success" executed="True" />
-                </results>
-              </test-suite>
-              <test-suite type="TestFixture" name="Start-WARACollector Parameter Sets.TenantId + SubscriptionIds + ResourceGroups + Specialized" executed="True" result="Success" success="True" time="0.1894" asserts="0" description="Start-WARACollector Parameter Sets.TenantId + SubscriptionIds + ResourceGroups + Specialized">
-                <results>
-                  <test-case description="Should proceed with TenantId + SubscriptionIds + ResourceGroups + Specialized" name="Start-WARACollector Parameter Sets.TenantId + SubscriptionIds + ResourceGroups + Specialized.Should proceed with TenantId + SubscriptionIds + ResourceGroups + Specialized" time="0.0093" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should return the path that does contains resource group" name="Get-AzureRestMethodUriPath.When to get an Azure REST API URI path.Should return the path that does contains resource group" time="0.0466" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should return the path that does contains resource group with query string" name="Get-AzureRestMethodUriPath.When to get an Azure REST API URI path.Should return the path that does contains resource group with query string" time="0.0269" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should return the path that does not contains resource group" name="Get-AzureRestMethodUriPath.When to get an Azure REST API URI path.Should return the path that does not contains resource group" time="0.0244" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should return the path that does not contains resource group with query string" name="Get-AzureRestMethodUriPath.When to get an Azure REST API URI path.Should return the path that does not contains resource group with query string" time="0.0227" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
             </results>
           </test-suite>
-          <test-suite type="TestFixture" name="Start-WARACollector" executed="True" result="Success" success="True" time="18.4023" asserts="0" description="Start-WARACollector">
+          <test-suite type="TestFixture" name="Invoke-AzureRestApi" executed="True" result="Success" success="True" time="0.4345" asserts="0" description="Invoke-AzureRestApi">
             <results>
-              <test-suite type="TestFixture" name="Start-WARACollector.When given the Default parameter set without SubscriptionIds and ResourceGroups" executed="True" result="Success" success="True" time="4.411" asserts="0" description="Start-WARACollector.When given the Default parameter set without SubscriptionIds and ResourceGroups">
+              <test-suite type="TestFixture" name="Invoke-AzureRestApi.When to invoke an Azure REST API with a path WITH resource group" executed="True" result="Success" success="True" time="0.2029" asserts="0" description="Invoke-AzureRestApi.When to invoke an Azure REST API with a path WITH resource group">
                 <results>
-                  <test-case description="Should throw an exception with the specified message" name="Start-WARACollector.When given the Default parameter set without SubscriptionIds and ResourceGroups.Should throw an exception with the specified message" time="4.399" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should call Get-AzureRestMethodUriPath and Invoke-AzRestMethod then return the response from the Azure REST API" name="Invoke-AzureRestApi.When to invoke an Azure REST API with a path WITH resource group.Should call Get-AzureRestMethodUriPath and Invoke-AzRestMethod then return the response from the Azure REST API" time="0.1053" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should call Get-AzureRestMethodUriPath and Invoke-AzRestMethod then return the response from the Azure REST API with query string" name="Invoke-AzureRestApi.When to invoke an Azure REST API with a path WITH resource group.Should call Get-AzureRestMethodUriPath and Invoke-AzRestMethod then return the response from the Azure REST API with query string" time="0.0259" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should call Get-AzureRestMethodUriPath and Invoke-AzRestMethod then return the response from the Azure REST API with request body" name="Invoke-AzureRestApi.When to invoke an Azure REST API with a path WITH resource group.Should call Get-AzureRestMethodUriPath and Invoke-AzRestMethod then return the response from the Azure REST API with request body" time="0.0334" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should call Get-AzureRestMethodUriPath and Invoke-AzRestMethod then return the response from the Azure REST API with query string and request body" name="Invoke-AzureRestApi.When to invoke an Azure REST API with a path WITH resource group.Should call Get-AzureRestMethodUriPath and Invoke-AzRestMethod then return the response from the Azure REST API with query string and request body" time="0.0308" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
-              <test-suite type="TestFixture" name="Start-WARACollector.Default Parameter Set" executed="True" result="Success" success="True" time="4.4578" asserts="0" description="Start-WARACollector.Default Parameter Set">
+              <test-suite type="TestFixture" name="Invoke-AzureRestApi.When to invoke an Azure REST API with a path WITHOUT resource group" executed="True" result="Success" success="True" time="0.2634" asserts="0" description="Invoke-AzureRestApi.When to invoke an Azure REST API with a path WITHOUT resource group">
                 <results>
-                  <test-case description="Should throw an exception when TenantID is invalid GUID" name="Start-WARACollector.Default Parameter Set.Should throw an exception when TenantID is invalid GUID" time="0.0106" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="Should throw an exception when SubscriptionIds are invalid" name="Start-WARACollector.Default Parameter Set.Should throw an exception when SubscriptionIds are invalid" time="0.0252" asserts="0" success="True" result="Success" executed="True" />
-                </results>
-              </test-suite>
-              <test-suite type="TestFixture" name="Start-WARACollector.ConfigFileSet Parameter Set" executed="True" result="Success" success="True" time="4.5117" asserts="0" description="Start-WARACollector.ConfigFileSet Parameter Set">
-                <results>
-                  <test-case description="Should throw an exception when ConfigFile does not exist" name="Start-WARACollector.ConfigFileSet Parameter Set.Should throw an exception when ConfigFile does not exist" time="0.0214" asserts="0" success="True" result="Success" executed="True" />
-                </results>
-              </test-suite>
-              <test-suite type="TestFixture" name="Start-WARACollector.Different Parameter Sets" executed="True" result="Success" success="True" time="4.5299" asserts="0" description="Start-WARACollector.Different Parameter Sets">
-                <results>
-                  <test-case description="Should throw an exception when parameters from both sets are provided" name="Start-WARACollector.Different Parameter Sets.Should throw an exception when parameters from both sets are provided" time="0.0078" asserts="0" success="True" result="Success" executed="True" />
-                </results>
-              </test-suite>
-              <test-suite type="TestFixture" name="Start-WARACollector.When given correct parameters with -passthru" executed="True" result="Success" success="True" time="11.4735" asserts="0" description="Start-WARACollector.When given correct parameters with -passthru">
-                <results>
-                  <test-case description="Should run and return an object that can be measured" name="Start-WARACollector.When given correct parameters with -passthru.Should run and return an object that can be measured" time="6.6723" asserts="0" success="True" result="Success" executed="True" />
-                </results>
-              </test-suite>
-              <test-suite type="TestFixture" name="Start-WARACollector.When recommendation URIs are unreachable (fallback to local data)" executed="True" result="Success" success="True" time="18.1781" asserts="0" description="Start-WARACollector.When recommendation URIs are unreachable (fallback to local data)">
-                <results>
-                  <test-case description="Should use local fallback files when remote fetch fails" name="Start-WARACollector.When recommendation URIs are unreachable (fallback to local data).Should use local fallback files when remote fetch fails" time="6.4436" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should call Get-AzureRestMethodUriPath and Invoke-AzRestMethod then return the response from the Azure REST API" name="Invoke-AzureRestApi.When to invoke an Azure REST API with a path WITHOUT resource group.Should call Get-AzureRestMethodUriPath and Invoke-AzRestMethod then return the response from the Azure REST API" time="0.0305" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should call Get-AzureRestMethodUriPath and Invoke-AzRestMethod then return the response from the Azure REST API with query string" name="Invoke-AzureRestApi.When to invoke an Azure REST API with a path WITHOUT resource group.Should call Get-AzureRestMethodUriPath and Invoke-AzRestMethod then return the response from the Azure REST API with query string" time="0.0116" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should call Get-AzureRestMethodUriPath and Invoke-AzRestMethod then return the response from the Azure REST API with request body" name="Invoke-AzureRestApi.When to invoke an Azure REST API with a path WITHOUT resource group.Should call Get-AzureRestMethodUriPath and Invoke-AzRestMethod then return the response from the Azure REST API with request body" time="0.0054" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should call Get-AzureRestMethodUriPath and Invoke-AzRestMethod then return the response from the Azure REST API with query string and request body" name="Invoke-AzureRestApi.When to invoke an Azure REST API with a path WITHOUT resource group.Should call Get-AzureRestMethodUriPath and Invoke-AzRestMethod then return the response from the Azure REST API with query string and request body" time="0.0053" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
             </results>
           </test-suite>
-          <test-suite type="TestFixture" name="Build-ImpactedResourceObj" executed="True" result="Success" success="True" time="18.5304" asserts="0" description="Build-ImpactedResourceObj">
+          <test-suite type="TestFixture" name="Import-WAFConfigFileData" executed="True" result="Success" success="True" time="0.6431" asserts="0" description="Import-WAFConfigFileData">
             <results>
-              <test-suite type="TestFixture" name="Build-ImpactedResourceObj.When called with valid parameters" executed="True" result="Success" success="True" time="0.1206" asserts="0" description="Build-ImpactedResourceObj.When called with valid parameters">
+              <test-suite type="TestFixture" name="Import-WAFConfigFileData.Import a WAF config file with valid and invalid data" executed="True" result="Success" success="True" time="0.1991" asserts="0" description="Import-WAFConfigFileData.Import a WAF config file with valid and invalid data">
                 <results>
-                  <test-case description="Should return an array of type aprlResourceObj with a single element" name="Build-ImpactedResourceObj.When called with valid parameters.Should return an array of type aprlResourceObj with a single element" time="0.0226" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="Should return an array of type aprlResourceObj with multiple elements" name="Build-ImpactedResourceObj.When called with valid parameters.Should return an array of type aprlResourceObj with multiple elements" time="0.0172" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="Should set the properties correctly" name="Build-ImpactedResourceObj.When called with valid parameters.Should set the properties correctly" time="0.051" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should return the correct content of the WAF config file" name="Import-WAFConfigFileData.Import a WAF config file with valid and invalid data.Should return the correct content of the WAF config file" time="0.1882" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
             </results>
           </test-suite>
-          <test-suite type="TestFixture" name="Build-ResourceTypeObj" executed="True" result="Success" success="True" time="18.6139" asserts="0" description="Build-ResourceTypeObj">
+          <test-suite type="TestFixture" name="Connect-WAFAzure" executed="True" result="Success" success="True" time="0.9787" asserts="0" description="Connect-WAFAzure">
             <results>
-              <test-suite type="TestFixture" name="Build-ResourceTypeObj.When given a list of resources and the types not in aprl or advisor" executed="True" result="Success" success="True" time="0.0744" asserts="0" description="Build-ResourceTypeObj.When given a list of resources and the types not in aprl or advisor">
+              <test-suite type="TestFixture" name="Connect-WAFAzure.When TenantID is provided" executed="True" result="Success" success="True" time="0.3274" asserts="0" description="Connect-WAFAzure.When TenantID is provided">
                 <results>
-                  <test-case description="Should return an object with the appropriate resource types" name="Build-ResourceTypeObj.When given a list of resources and the types not in aprl or advisor.Should return an object with the appropriate resource types" time="0.0651" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should call Connect-AzAccount if Get-AzContext returns no context (There is no existing context)" name="Connect-WAFAzure.When TenantID is provided.Should call Connect-AzAccount if Get-AzContext returns no context (There is no existing context)" time="0.1435" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should call Connect-AzAccount if Get-AzContext returns a context of different tenant" name="Connect-WAFAzure.When TenantID is provided.Should call Connect-AzAccount if Get-AzContext returns a context of different tenant" time="0.0668" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should call Connect-AzAccount if Get-AzContext returns a context of different environment" name="Connect-WAFAzure.When TenantID is provided.Should call Connect-AzAccount if Get-AzContext returns a context of different environment" time="0.0644" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should not call Connect-AzAccount if Get-AzContext returns a context of the same tenant and the same environment" name="Connect-WAFAzure.When TenantID is provided.Should not call Connect-AzAccount if Get-AzContext returns a context of the same tenant and the same environment" time="0.0442" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
             </results>
           </test-suite>
-          <test-suite type="TestFixture" name="Get-WARAOtherRecommendations" executed="True" result="Success" success="True" time="18.7871" asserts="0" description="Get-WARAOtherRecommendations">
+          <test-suite type="TestFixture" name="Test-FileExists" executed="True" result="Success" success="True" time="1.0773" asserts="0" description="Test-FileExists">
             <results>
-              <test-suite type="TestFixture" name="Get-WARAOtherRecommendations.When given correct parameters" executed="True" result="Success" success="True" time="0.1658" asserts="0" description="Get-WARAOtherRecommendations.When given correct parameters">
+              <test-suite type="TestFixture" name="Test-FileExists.When given an existing file" executed="True" result="Success" success="True" time="0.0402" asserts="0" description="Test-FileExists.When given an existing file">
                 <results>
-                  <test-case description="Should return the right stuff" name="Get-WARAOtherRecommendations.When given correct parameters.Should return the right stuff" time="0.1538" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should return true" name="Test-FileExists.When given an existing file.Should return true" time="0.0317" asserts="0" success="True" result="Success" executed="True" />
+                </results>
+              </test-suite>
+              <test-suite type="TestFixture" name="Test-FileExists.When given a file that doesn't exist" executed="True" result="Success" success="True" time="0.0884" asserts="0" description="Test-FileExists.When given a file that doesn't exist">
+                <results>
+                  <test-case description="Should throw an error indicating so" name="Test-FileExists.When given a file that doesn't exist.Should throw an error indicating so" time="0.0413" asserts="0" success="True" result="Success" executed="True" />
+                </results>
+              </test-suite>
+            </results>
+          </test-suite>
+          <test-suite type="TestFixture" name="Test-WAFTagPattern" executed="True" result="Success" success="True" time="1.1647" asserts="0" description="Test-WAFTagPattern">
+            <results>
+              <test-suite type="TestFixture" name="Test-WAFTagPattern.When given a valid tag pattern" executed="True" result="Success" success="True" time="0.0303" asserts="0" description="Test-WAFTagPattern.When given a valid tag pattern">
+                <results>
+                  <test-case description="Should return true" name="Test-WAFTagPattern.When given a valid tag pattern.Should return true" time="0.0229" asserts="0" success="True" result="Success" executed="True" />
+                </results>
+              </test-suite>
+              <test-suite type="TestFixture" name="Test-WAFTagPattern.When given an invalid tag pattern" executed="True" result="Success" success="True" time="0.0782" asserts="0" description="Test-WAFTagPattern.When given an invalid tag pattern">
+                <results>
+                  <test-case description="Should throw the exception" name="Test-WAFTagPattern.When given an invalid tag pattern.Should throw the exception" time="0.0405" asserts="0" success="True" result="Success" executed="True" />
+                </results>
+              </test-suite>
+            </results>
+          </test-suite>
+          <test-suite type="TestFixture" name="Test-WAFResourceGroupId" executed="True" result="Success" success="True" time="1.4211" asserts="0" description="Test-WAFResourceGroupId">
+            <results>
+              <test-suite type="TestFixture" name="Test-WAFResourceGroupId.When given a valid resource group id" executed="True" result="Success" success="True" time="0.0631" asserts="0" description="Test-WAFResourceGroupId.When given a valid resource group id">
+                <results>
+                  <test-case description="Should return true with a valid resource group id" name="Test-WAFResourceGroupId.When given a valid resource group id.Should return true with a valid resource group id" time="0.032" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should return true when the resource group id contains a trailing slash" name="Test-WAFResourceGroupId.When given a valid resource group id.Should return true when the resource group id contains a trailing slash" time="0.0232" asserts="0" success="True" result="Success" executed="True" />
+                </results>
+              </test-suite>
+              <test-suite type="TestFixture" name="Test-WAFResourceGroupId.When given an invalid resource group id" executed="True" result="Success" success="True" time="0.2491" asserts="0" description="Test-WAFResourceGroupId.When given an invalid resource group id">
+                <results>
+                  <test-case description="Should throw the exception with a bad GUID" name="Test-WAFResourceGroupId.When given an invalid resource group id.Should throw the exception with a bad GUID" time="0.0567" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should throw the exception with a bad resourceGroups typo - missing s" name="Test-WAFResourceGroupId.When given an invalid resource group id.Should throw the exception with a bad resourceGroups typo - missing s" time="0.0487" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should throw the exception with a bad subscription typo - missing s" name="Test-WAFResourceGroupId.When given an invalid resource group id.Should throw the exception with a bad subscription typo - missing s" time="0.0454" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should throw the exception when missing the leading slash" name="Test-WAFResourceGroupId.When given an invalid resource group id.Should throw the exception when missing the leading slash" time="0.0272" asserts="0" success="True" result="Success" executed="True" />
+                </results>
+              </test-suite>
+            </results>
+          </test-suite>
+          <test-suite type="TestFixture" name="Test-WAFSubscriptionId" executed="True" result="Success" success="True" time="1.5964" asserts="0" description="Test-WAFSubscriptionId">
+            <results>
+              <test-suite type="TestFixture" name="Test-WAFSubscriptionId.When given a valid subscription id" executed="True" result="Success" success="True" time="0.0668" asserts="0" description="Test-WAFSubscriptionId.When given a valid subscription id">
+                <results>
+                  <test-case description="Should return true with a valid subscription id" name="Test-WAFSubscriptionId.When given a valid subscription id.Should return true with a valid subscription id" time="0.0347" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should return true when the subscription id contains a trailing slash" name="Test-WAFSubscriptionId.When given a valid subscription id.Should return true when the subscription id contains a trailing slash" time="0.0242" asserts="0" success="True" result="Success" executed="True" />
+                </results>
+              </test-suite>
+              <test-suite type="TestFixture" name="Test-WAFSubscriptionId.When given an invalid subscription id" executed="True" result="Success" success="True" time="0.1678" asserts="0" description="Test-WAFSubscriptionId.When given an invalid subscription id">
+                <results>
+                  <test-case description="Should throw the exception with a bad GUID" name="Test-WAFSubscriptionId.When given an invalid subscription id.Should throw the exception with a bad GUID" time="0.0436" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should throw the exception with a bad subscription typo - missing s" name="Test-WAFSubscriptionId.When given an invalid subscription id.Should throw the exception with a bad subscription typo - missing s" time="0.0271" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should throw the exception when missing the leading slash" name="Test-WAFSubscriptionId.When given an invalid subscription id.Should throw the exception when missing the leading slash" time="0.0234" asserts="0" success="True" result="Success" executed="True" />
+                </results>
+              </test-suite>
+            </results>
+          </test-suite>
+          <test-suite type="TestFixture" name="Test-WAFIsGuid" executed="True" result="Success" success="True" time="1.6912" asserts="0" description="Test-WAFIsGuid">
+            <results>
+              <test-suite type="TestFixture" name="Test-WAFIsGuid.When given a valid GUID" executed="True" result="Success" success="True" time="0.0319" asserts="0" description="Test-WAFIsGuid.When given a valid GUID">
+                <results>
+                  <test-case description="Should return true with a valid GUID" name="Test-WAFIsGuid.When given a valid GUID.Should return true with a valid GUID" time="0.023" asserts="0" success="True" result="Success" executed="True" />
+                </results>
+              </test-suite>
+              <test-suite type="TestFixture" name="Test-WAFIsGuid.When given an invalid GUID" executed="True" result="Success" success="True" time="0.088" asserts="0" description="Test-WAFIsGuid.When given an invalid GUID">
+                <results>
+                  <test-case description="Should throw the exception with a bad GUID" name="Test-WAFIsGuid.When given an invalid GUID.Should throw the exception with a bad GUID" time="0.0487" asserts="0" success="True" result="Success" executed="True" />
+                </results>
+              </test-suite>
+            </results>
+          </test-suite>
+          <test-suite type="TestFixture" name="Repair-WAFSubscriptionId" executed="True" result="Success" success="True" time="1.7569" asserts="0" description="Repair-WAFSubscriptionId">
+            <results>
+              <test-suite type="TestFixture" name="Repair-WAFSubscriptionId.When given a subscription id without /subscriptions/" executed="True" result="Success" success="True" time="0.0301" asserts="0" description="Repair-WAFSubscriptionId.When given a subscription id without /subscriptions/">
+                <results>
+                  <test-case description="Should return a subscription id with /subscriptions/" name="Repair-WAFSubscriptionId.When given a subscription id without /subscriptions/.Should return a subscription id with /subscriptions/" time="0.0231" asserts="0" success="True" result="Success" executed="True" />
+                </results>
+              </test-suite>
+              <test-suite type="TestFixture" name="Repair-WAFSubscriptionId.When given two subscription ids, one with /subscriptions/ and one without" executed="True" result="Success" success="True" time="0.0591" asserts="0" description="Repair-WAFSubscriptionId.When given two subscription ids, one with /subscriptions/ and one without">
+                <results>
+                  <test-case description="Should return both subscription ids with /subscriptions/" name="Repair-WAFSubscriptionId.When given two subscription ids, one with /subscriptions/ and one without.Should return both subscription ids with /subscriptions/" time="0.022" asserts="0" success="True" result="Success" executed="True" />
+                </results>
+              </test-suite>
+            </results>
+          </test-suite>
+        </results>
+      </test-suite>
+      <test-suite type="TestFixture" name="C:\Users\hanxia\repos\Well-Architected-Reliability-Assessment\src\tests\wara\wara.tests.ps1" executed="True" result="Success" success="True" time="26.4475" asserts="0" description="C:\Users\hanxia\repos\Well-Architected-Reliability-Assessment\src\tests\wara\wara.tests.ps1">
+        <results>
+          <test-suite type="TestFixture" name="Start-WARACollector Parameter Sets" executed="True" result="Success" success="True" time="0.3268" asserts="0" description="Start-WARACollector Parameter Sets">
+            <results>
+              <test-suite type="TestFixture" name="Start-WARACollector Parameter Sets.ConfigFile" executed="True" result="Success" success="True" time="0.0947" asserts="0" description="Start-WARACollector Parameter Sets.ConfigFile">
+                <results>
+                  <test-case description="Should proceed when used alone." name="Start-WARACollector Parameter Sets.ConfigFile.Should proceed when used alone." time="0.0853" asserts="0" success="True" result="Success" executed="True" />
+                </results>
+              </test-suite>
+              <test-suite type="TestFixture" name="Start-WARACollector Parameter Sets.ConfigFile + Specialized" executed="True" result="Success" success="True" time="0.1451" asserts="0" description="Start-WARACollector Parameter Sets.ConfigFile + Specialized">
+                <results>
+                  <test-case description="Should proceed with ConfigFile + Specialized." name="Start-WARACollector Parameter Sets.ConfigFile + Specialized.Should proceed with ConfigFile + Specialized." time="0.0399" asserts="0" success="True" result="Success" executed="True" />
+                </results>
+              </test-suite>
+              <test-suite type="TestFixture" name="Start-WARACollector Parameter Sets.TenantId + SubscriptionIds" executed="True" result="Success" success="True" time="0.1992" asserts="0" description="Start-WARACollector Parameter Sets.TenantId + SubscriptionIds">
+                <results>
+                  <test-case description="Should proceed with TenantId + SubscriptionIds" name="Start-WARACollector Parameter Sets.TenantId + SubscriptionIds.Should proceed with TenantId + SubscriptionIds" time="0.0435" asserts="0" success="True" result="Success" executed="True" />
+                </results>
+              </test-suite>
+              <test-suite type="TestFixture" name="Start-WARACollector Parameter Sets.TenantId + SubscriptionIds + ResourceGroups" executed="True" result="Success" success="True" time="0.2346" asserts="0" description="Start-WARACollector Parameter Sets.TenantId + SubscriptionIds + ResourceGroups">
+                <results>
+                  <test-case description="Should proceed with TenantId + SubscriptionIds + ResourceGroups" name="Start-WARACollector Parameter Sets.TenantId + SubscriptionIds + ResourceGroups.Should proceed with TenantId + SubscriptionIds + ResourceGroups" time="0.0279" asserts="0" success="True" result="Success" executed="True" />
+                </results>
+              </test-suite>
+              <test-suite type="TestFixture" name="Start-WARACollector Parameter Sets.TenantId + SubscriptionIds + ResourceGroups + Specialized" executed="True" result="Success" success="True" time="0.2855" asserts="0" description="Start-WARACollector Parameter Sets.TenantId + SubscriptionIds + ResourceGroups + Specialized">
+                <results>
+                  <test-case description="Should proceed with TenantId + SubscriptionIds + ResourceGroups + Specialized" name="Start-WARACollector Parameter Sets.TenantId + SubscriptionIds + ResourceGroups + Specialized.Should proceed with TenantId + SubscriptionIds + ResourceGroups + Specialized" time="0.044" asserts="0" success="True" result="Success" executed="True" />
+                </results>
+              </test-suite>
+            </results>
+          </test-suite>
+          <test-suite type="TestFixture" name="Start-WARACollector" executed="True" result="Success" success="True" time="23.6175" asserts="0" description="Start-WARACollector">
+            <results>
+              <test-suite type="TestFixture" name="Start-WARACollector.When given the Default parameter set without SubscriptionIds and ResourceGroups" executed="True" result="Success" success="True" time="4.1955" asserts="0" description="Start-WARACollector.When given the Default parameter set without SubscriptionIds and ResourceGroups">
+                <results>
+                  <test-case description="Should throw an exception with the specified message" name="Start-WARACollector.When given the Default parameter set without SubscriptionIds and ResourceGroups.Should throw an exception with the specified message" time="4.1888" asserts="0" success="True" result="Success" executed="True" />
+                </results>
+              </test-suite>
+              <test-suite type="TestFixture" name="Start-WARACollector.Default Parameter Set" executed="True" result="Success" success="True" time="4.2228" asserts="0" description="Start-WARACollector.Default Parameter Set">
+                <results>
+                  <test-case description="Should throw an exception when TenantID is invalid GUID" name="Start-WARACollector.Default Parameter Set.Should throw an exception when TenantID is invalid GUID" time="0.0079" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should throw an exception when SubscriptionIds are invalid" name="Start-WARACollector.Default Parameter Set.Should throw an exception when SubscriptionIds are invalid" time="0.0099" asserts="0" success="True" result="Success" executed="True" />
+                </results>
+              </test-suite>
+              <test-suite type="TestFixture" name="Start-WARACollector.ConfigFileSet Parameter Set" executed="True" result="Success" success="True" time="4.2398" asserts="0" description="Start-WARACollector.ConfigFileSet Parameter Set">
+                <results>
+                  <test-case description="Should throw an exception when ConfigFile does not exist" name="Start-WARACollector.ConfigFileSet Parameter Set.Should throw an exception when ConfigFile does not exist" time="0.0103" asserts="0" success="True" result="Success" executed="True" />
+                </results>
+              </test-suite>
+              <test-suite type="TestFixture" name="Start-WARACollector.Different Parameter Sets" executed="True" result="Success" success="True" time="4.2618" asserts="0" description="Start-WARACollector.Different Parameter Sets">
+                <results>
+                  <test-case description="Should throw an exception when parameters from both sets are provided" name="Start-WARACollector.Different Parameter Sets.Should throw an exception when parameters from both sets are provided" time="0.0146" asserts="0" success="True" result="Success" executed="True" />
+                </results>
+              </test-suite>
+              <test-suite type="TestFixture" name="Start-WARACollector.When given correct parameters with -passthru" executed="True" result="Success" success="True" time="15.238" asserts="0" description="Start-WARACollector.When given correct parameters with -passthru">
+                <results>
+                  <test-case description="Should run and return an object that can be measured" name="Start-WARACollector.When given correct parameters with -passthru.Should run and return an object that can be measured" time="10.3172" asserts="0" success="True" result="Success" executed="True" />
+                </results>
+              </test-suite>
+              <test-suite type="TestFixture" name="Start-WARACollector.When recommendation URIs are unreachable (fallback to local data)" executed="True" result="Success" success="True" time="23.2828" asserts="0" description="Start-WARACollector.When recommendation URIs are unreachable (fallback to local data)">
+                <results>
+                  <test-case description="Should use local fallback files when remote fetch fails" name="Start-WARACollector.When recommendation URIs are unreachable (fallback to local data).Should use local fallback files when remote fetch fails" time="7.3503" asserts="0" success="True" result="Success" executed="True" />
+                </results>
+              </test-suite>
+            </results>
+          </test-suite>
+          <test-suite type="TestFixture" name="Build-ImpactedResourceObj" executed="True" result="Success" success="True" time="24.3062" asserts="0" description="Build-ImpactedResourceObj">
+            <results>
+              <test-suite type="TestFixture" name="Build-ImpactedResourceObj.When called with valid parameters" executed="True" result="Success" success="True" time="0.6817" asserts="0" description="Build-ImpactedResourceObj.When called with valid parameters">
+                <results>
+                  <test-case description="Should return an array of type aprlResourceObj with a single element" name="Build-ImpactedResourceObj.When called with valid parameters.Should return an array of type aprlResourceObj with a single element" time="0.1891" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should return an array of type aprlResourceObj with multiple elements" name="Build-ImpactedResourceObj.When called with valid parameters.Should return an array of type aprlResourceObj with multiple elements" time="0.16" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="Should set the properties correctly" name="Build-ImpactedResourceObj.When called with valid parameters.Should set the properties correctly" time="0.1033" asserts="0" success="True" result="Success" executed="True" />
+                </results>
+              </test-suite>
+            </results>
+          </test-suite>
+          <test-suite type="TestFixture" name="Build-ResourceTypeObj" executed="True" result="Success" success="True" time="24.4089" asserts="0" description="Build-ResourceTypeObj">
+            <results>
+              <test-suite type="TestFixture" name="Build-ResourceTypeObj.When given a list of resources and the types not in aprl or advisor" executed="True" result="Success" success="True" time="0.0961" asserts="0" description="Build-ResourceTypeObj.When given a list of resources and the types not in aprl or advisor">
+                <results>
+                  <test-case description="Should return an object with the appropriate resource types" name="Build-ResourceTypeObj.When given a list of resources and the types not in aprl or advisor.Should return an object with the appropriate resource types" time="0.0892" asserts="0" success="True" result="Success" executed="True" />
+                </results>
+              </test-suite>
+            </results>
+          </test-suite>
+          <test-suite type="TestFixture" name="Get-WARAOtherRecommendations" executed="True" result="Success" success="True" time="24.6381" asserts="0" description="Get-WARAOtherRecommendations">
+            <results>
+              <test-suite type="TestFixture" name="Get-WARAOtherRecommendations.When given correct parameters" executed="True" result="Success" success="True" time="0.2229" asserts="0" description="Get-WARAOtherRecommendations.When given correct parameters">
+                <results>
+                  <test-case description="Should return the right stuff" name="Get-WARAOtherRecommendations.When given correct parameters.Should return the right stuff" time="0.2163" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
             </results>

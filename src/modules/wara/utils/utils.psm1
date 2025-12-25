@@ -104,6 +104,7 @@ function Add-WAFResourceTopology {
         'topology_vnetIds',
         'topology_privateIps',
         'topology_publicIpIds',
+        'topology_publicIpPrefixIds',
         'topology_publicIpAddresses',
         'topology_publicFqdns',
         'topology_privateEndpointIds',
@@ -113,7 +114,10 @@ function Add-WAFResourceTopology {
         'topology_vnetPeeringRemoteVnetIds',
         'topology_vnetPeeringDetails',
         'topology_connectedResourceIds',
-        'topology_publicNetworkAccess'
+        'topology_publicNetworkAccess',
+        'topology_expressRouteCircuitIds',
+        'topology_expressRouteGatewayIds',
+        'topology_gatewayType'
     )
 
     function Normalize-StringList {
@@ -163,7 +167,83 @@ function Add-WAFResourceTopology {
     }
 
     try {
-        Write-Verbose 'Querying Azure Resource Graph for topology enrichment (VNet/Subnet/NIC/PrivateEndpoint/PublicIP/AppService)..'
+        Write-Verbose 'Querying Azure Resource Graph for topology enrichment (VNet/Subnet/NIC/PrivateEndpoint/PublicIP/AppService/LB/AppGW/Firewall/ER)..'
+
+        function Invoke-WAFQueryOrEmpty {
+            param(
+                [Parameter(Mandatory = $true)][string] $Query,
+                [Parameter(Mandatory = $true)][string] $FeatureName
+            )
+
+            try {
+                return @(Invoke-WAFQuery -Query $Query -SubscriptionIds $SubscriptionIds)
+            }
+            catch {
+                $msg = $_.Exception.Message
+                if ($_.Exception.InnerException -and $_.Exception.InnerException.Message) {
+                    $msg = "$msg | Inner: $($_.Exception.InnerException.Message)"
+                }
+                Write-Verbose ("Topology enrichment: ARG query failed for {0}; continuing. Error: {1}" -f $FeatureName, $msg)
+                return @()
+            }
+        }
+
+        function Test-WAFCanUseAzNetworkFallback {
+            try {
+                if (-not (Get-Command -Name Get-AzContext -ErrorAction SilentlyContinue)) { return $false }
+                if (-not (Get-Command -Name Set-AzContext -ErrorAction SilentlyContinue)) { return $false }
+                if (-not (Get-AzContext -ErrorAction SilentlyContinue)) { return $false }
+                return $true
+            }
+            catch {
+                return $false
+            }
+        }
+
+        $currentContextSubscriptionId = $null
+        function Ensure-WAFSubscriptionContext {
+            param(
+                [Parameter(Mandatory = $true)][string] $SubscriptionId
+            )
+
+            if ([string]::IsNullOrWhiteSpace($SubscriptionId)) { return $false }
+
+            $current = Get-Variable -Name currentContextSubscriptionId -Scope 1 -ValueOnly -ErrorAction SilentlyContinue
+            if ($current -eq $SubscriptionId) { return $true }
+
+            try {
+                Set-AzContext -SubscriptionId $SubscriptionId -ErrorAction Stop | Out-Null
+                Set-Variable -Name currentContextSubscriptionId -Scope 1 -Value $SubscriptionId
+                return $true
+            }
+            catch {
+                Write-Verbose ("Topology enrichment: failed to set Az context to subscription {0}; skipping fallback in that subscription. Error: {1}" -f $SubscriptionId, $_.Exception.Message)
+                return $false
+            }
+        }
+
+        function Get-InventoryItemsByType {
+            param(
+                [Parameter(Mandatory = $true)][string] $ResourceType
+            )
+
+            return @($ResourceInventory | Where-Object {
+                    $_.type -ieq $ResourceType -and
+                    -not [string]::IsNullOrWhiteSpace([string]$_.name) -and
+                    -not [string]::IsNullOrWhiteSpace([string]$_.resourceGroup)
+                })
+        }
+
+        function New-TopologySetFromValues {
+            param([object[]] $Values)
+            $out = @()
+            foreach ($v in @($Values)) {
+                if ($null -eq $v) { continue }
+                $s = [string]$v
+                if (-not [string]::IsNullOrWhiteSpace($s)) { $out += $s }
+            }
+            return @($out | Select-Object -Unique)
+        }
 
         # Subnet -> VNet map (+ subnet metadata)
         $subnetQuery = @"
@@ -177,7 +257,7 @@ resources
 | extend routeTableId = tostring(sn.properties.routeTable.id)
 | project vnetId = id, vnetName = name, subscriptionId, resourceGroup, location, subnetId, subnetName, subnetPrefix, nsgId, routeTableId
 "@
-        $subnets = Invoke-WAFQuery -Query $subnetQuery -SubscriptionIds $SubscriptionIds
+        $subnets = Invoke-WAFQueryOrEmpty -Query $subnetQuery -FeatureName 'subnets'
         $subnetToVnet = @{}
         foreach ($s in @($subnets)) {
             if ($null -eq $s) { continue }
@@ -198,7 +278,7 @@ resources
 | extend useRemoteGateways = tobool(properties.useRemoteGateways)
 | project peeringId = id, peeringName = name, subscriptionId, resourceGroup, location, localVnetId, remoteVnetId, peeringState, allowVnetAccess, allowForwardedTraffic, allowGatewayTransit, useRemoteGateways
 "@
-        $vnetPeerings = Invoke-WAFQuery -Query $vnetPeeringQuery -SubscriptionIds $SubscriptionIds
+        $vnetPeerings = Invoke-WAFQueryOrEmpty -Query $vnetPeeringQuery -FeatureName 'vnetPeerings'
         $vnetToRemoteVnetIds = @{}
         $vnetToPeeringDetails = @{}
         foreach ($p in @($vnetPeerings)) {
@@ -220,7 +300,7 @@ resources
         # Use control-plane cmdlets to enumerate peerings per VNet already present in resource inventory.
         if ($vnetToRemoteVnetIds.Count -eq 0) {
             $getPeeringCmd = Get-Command -Name Get-AzVirtualNetworkPeering -ErrorAction SilentlyContinue
-            if ($null -ne $getPeeringCmd) {
+            if ($null -ne $getPeeringCmd -and (Test-WAFCanUseAzNetworkFallback)) {
                 Write-Verbose 'No VNet peerings returned by ARG query; falling back to Get-AzVirtualNetworkPeering.'
 
                 $vnetsInInventory = @($ResourceInventory | Where-Object {
@@ -233,7 +313,13 @@ resources
                     $vnetName = [string]$vnet.name
                     if ([string]::IsNullOrWhiteSpace($rg) -or [string]::IsNullOrWhiteSpace($vnetName)) { continue }
 
-                    $peerings = @(Get-AzVirtualNetworkPeering -ResourceGroupName $rg -VirtualNetworkName $vnetName -ErrorAction SilentlyContinue)
+                    try {
+                        $peerings = @(Get-AzVirtualNetworkPeering -ResourceGroupName $rg -VirtualNetworkName $vnetName -ErrorAction SilentlyContinue)
+                    }
+                    catch {
+                        Write-Verbose ("Topology enrichment: Get-AzVirtualNetworkPeering failed for {0}/{1}; continuing. Error: {2}" -f $rg, $vnetName, $_.Exception.Message)
+                        continue
+                    }
                     foreach ($peering in $peerings) {
                         if ($null -eq $peering) { continue }
                         $remoteId = [string]$peering.RemoteVirtualNetwork.Id
@@ -250,7 +336,7 @@ resources
                 }
             }
             else {
-                Write-Verbose 'No VNet peerings returned by ARG query and Get-AzVirtualNetworkPeering is unavailable; skipping peering enrichment.'
+                Write-Verbose 'No VNet peerings returned by ARG query and Get-AzVirtualNetworkPeering is unavailable or Az context is missing; skipping peering enrichment.'
             }
         }
 
@@ -264,7 +350,7 @@ resources
 | extend privateIp = tostring(ipconf.properties.privateIPAddress)
 | summarize subnetIds = make_set(subnetId), publicIpIds = make_set(publicIpId), privateIps = make_set(privateIp), vmId = any(tostring(properties.virtualMachine.id)) by id, name, subscriptionId, resourceGroup, location
 "@
-        $nics = Invoke-WAFQuery -Query $nicQuery -SubscriptionIds $SubscriptionIds
+        $nics = Invoke-WAFQueryOrEmpty -Query $nicQuery -FeatureName 'nics'
         $nicById = @{}
         $vmToNicIds = @{}
         foreach ($n in @($nics)) {
@@ -287,11 +373,548 @@ resources
 | extend fqdn = tostring(properties.dnsSettings.fqdn)
 | project id, name, ipAddress, fqdn, subscriptionId, resourceGroup, location
 "@
-        $pips = Invoke-WAFQuery -Query $pipQuery -SubscriptionIds $SubscriptionIds
+        $pips = Invoke-WAFQueryOrEmpty -Query $pipQuery -FeatureName 'publicIps'
         $pipById = @{}
         foreach ($p in @($pips)) {
             if ($null -eq $p -or [string]::IsNullOrWhiteSpace([string]$p.id)) { continue }
             $pipById[([string]$p.id).ToLowerInvariant()] = $p
+        }
+
+        # Load Balancers: frontends (subnet/publicIP/privateIP) + backends (NIC ipConfig IDs)
+        $lbQuery = @"
+resources
+| where type =~ 'microsoft.network/loadbalancers'
+| mv-expand fe = properties.frontendIPConfigurations to typeof(dynamic)
+| extend feSubnetId = tostring(fe.properties.subnet.id)
+| extend fePublicIpId = tostring(fe.properties.publicIPAddress.id)
+| extend fePrivateIp = tostring(fe.properties.privateIPAddress)
+| mv-expand be = properties.backendAddressPools to typeof(dynamic) limit 100
+| mv-expand beip = be.properties.backendIPConfigurations to typeof(dynamic) limit 200
+| extend backendIpConfigId = tostring(beip.id)
+| summarize frontendSubnetIds = make_set(feSubnetId), frontendPublicIpIds = make_set(fePublicIpId), frontendPrivateIps = make_set(fePrivateIp), backendIpConfigIds = make_set(backendIpConfigId) by id, name, subscriptionId, resourceGroup, location
+"@
+        $lbs = Invoke-WAFQueryOrEmpty -Query $lbQuery -FeatureName 'loadBalancers'
+
+        if (@($lbs).Count -eq 0 -and (Test-WAFCanUseAzNetworkFallback)) {
+            $getLbCmd = Get-Command -Name Get-AzLoadBalancer -ErrorAction SilentlyContinue
+            if ($null -ne $getLbCmd) {
+                $lbItems = Get-InventoryItemsByType -ResourceType 'microsoft.network/loadbalancers'
+                if ($lbItems.Count -gt 0) {
+                    Write-Verbose 'No Load Balancers returned by ARG; falling back to Get-AzLoadBalancer (scoped to inventory).'
+                    $lbFallbackById = @{}
+                    foreach ($item in $lbItems) {
+                        $subId = [string]$item.subscriptionId
+                        if (-not (Ensure-WAFSubscriptionContext -SubscriptionId $subId)) { continue }
+
+                        $rg = [string]$item.resourceGroup
+                        $name = [string]$item.name
+                        try {
+                            $lb0 = Get-AzLoadBalancer -ResourceGroupName $rg -Name $name -ErrorAction Stop
+                        }
+                        catch {
+                            Write-Verbose ("Topology enrichment: Get-AzLoadBalancer failed for {0}/{1}. Error: {2}" -f $rg, $name, $_.Exception.Message)
+                            continue
+                        }
+
+                        if ($null -eq $lb0 -or [string]::IsNullOrWhiteSpace([string]$lb0.Id)) { continue }
+                        $idLower = ([string]$lb0.Id).ToLowerInvariant()
+                        if ($lbFallbackById.ContainsKey($idLower)) { continue }
+
+                        $feSubnetIds = @()
+                        $fePipIds = @()
+                        $fePrivateIps = @()
+                        foreach ($fe0 in @($lb0.FrontendIpConfigurations)) {
+                            if ($null -eq $fe0) { continue }
+                            if ($fe0.Subnet -and $fe0.Subnet.Id) { $feSubnetIds += [string]$fe0.Subnet.Id }
+                            if ($fe0.PublicIpAddress -and $fe0.PublicIpAddress.Id) { $fePipIds += [string]$fe0.PublicIpAddress.Id }
+                            if (-not [string]::IsNullOrWhiteSpace([string]$fe0.PrivateIpAddress)) { $fePrivateIps += [string]$fe0.PrivateIpAddress }
+                        }
+
+                        $backendIpConfigIds = @()
+                        foreach ($pool0 in @($lb0.BackendAddressPools)) {
+                            if ($null -eq $pool0) { continue }
+                            foreach ($beip0 in @($pool0.BackendIpConfigurations)) {
+                                if ($null -eq $beip0) { continue }
+                                if (-not [string]::IsNullOrWhiteSpace([string]$beip0.Id)) { $backendIpConfigIds += [string]$beip0.Id }
+                            }
+                        }
+
+                        $lbFallbackById[$idLower] = [pscustomobject]@{
+                            id                = [string]$lb0.Id
+                            name              = [string]$lb0.Name
+                            subscriptionId    = $subId
+                            resourceGroup     = $rg
+                            location          = [string]$lb0.Location
+                            frontendSubnetIds = New-TopologySetFromValues -Values $feSubnetIds
+                            frontendPublicIpIds = New-TopologySetFromValues -Values $fePipIds
+                            frontendPrivateIps = New-TopologySetFromValues -Values $fePrivateIps
+                            backendIpConfigIds  = New-TopologySetFromValues -Values $backendIpConfigIds
+                        }
+                    }
+                    $lbs = @($lbFallbackById.Values)
+                }
+            }
+            else {
+                Write-Verbose 'No Load Balancers returned by ARG and Get-AzLoadBalancer is unavailable; skipping LB fallback.'
+            }
+        }
+
+        $lbById = @{}
+        foreach ($lb in @($lbs)) {
+            if ($null -eq $lb -or [string]::IsNullOrWhiteSpace([string]$lb.id)) { continue }
+            $lbById[([string]$lb.id).ToLowerInvariant()] = $lb
+        }
+
+        # Application Gateways: gateway subnet + frontends (publicIP/privateIP) + backends (NIC ipConfig IDs)
+        $appGwQuery = @"
+resources
+| where type =~ 'microsoft.network/applicationgateways'
+| mv-expand gip = properties.gatewayIPConfigurations to typeof(dynamic)
+| extend gwSubnetId = tostring(gip.properties.subnet.id)
+| mv-expand fe = properties.frontendIPConfigurations to typeof(dynamic)
+| extend fePublicIpId = tostring(fe.properties.publicIPAddress.id)
+| extend fePrivateIp = tostring(fe.properties.privateIPAddress)
+| mv-expand be = properties.backendAddressPools to typeof(dynamic) limit 100
+| mv-expand beip = be.properties.backendIPConfigurations to typeof(dynamic) limit 200
+| extend backendIpConfigId = tostring(beip.id)
+| summarize subnetIds = make_set(gwSubnetId), publicIpIds = make_set(fePublicIpId), privateIps = make_set(fePrivateIp), backendIpConfigIds = make_set(backendIpConfigId) by id, name, subscriptionId, resourceGroup, location
+"@
+        $appGws = Invoke-WAFQueryOrEmpty -Query $appGwQuery -FeatureName 'applicationGateways'
+
+        if (@($appGws).Count -eq 0 -and (Test-WAFCanUseAzNetworkFallback)) {
+            $getAgCmd = Get-Command -Name Get-AzApplicationGateway -ErrorAction SilentlyContinue
+            if ($null -ne $getAgCmd) {
+                $agItems = Get-InventoryItemsByType -ResourceType 'microsoft.network/applicationgateways'
+                if ($agItems.Count -gt 0) {
+                    Write-Verbose 'No Application Gateways returned by ARG; falling back to Get-AzApplicationGateway (scoped to inventory).'
+                    $agFallbackById = @{}
+                    foreach ($item in $agItems) {
+                        $subId = [string]$item.subscriptionId
+                        if (-not (Ensure-WAFSubscriptionContext -SubscriptionId $subId)) { continue }
+
+                        $rg = [string]$item.resourceGroup
+                        $name = [string]$item.name
+                        try {
+                            $ag0 = Get-AzApplicationGateway -ResourceGroupName $rg -Name $name -ErrorAction Stop
+                        }
+                        catch {
+                            Write-Verbose ("Topology enrichment: Get-AzApplicationGateway failed for {0}/{1}. Error: {2}" -f $rg, $name, $_.Exception.Message)
+                            continue
+                        }
+
+                        if ($null -eq $ag0 -or [string]::IsNullOrWhiteSpace([string]$ag0.Id)) { continue }
+                        $idLower = ([string]$ag0.Id).ToLowerInvariant()
+                        if ($agFallbackById.ContainsKey($idLower)) { continue }
+
+                        $subnetIds = @()
+                        foreach ($gip0 in @($ag0.GatewayIPConfigurations)) {
+                            if ($null -eq $gip0) { continue }
+                            if ($gip0.Subnet -and $gip0.Subnet.Id) { $subnetIds += [string]$gip0.Subnet.Id }
+                        }
+
+                        $pipIds = @()
+                        $privateIps = @()
+                        foreach ($fe0 in @($ag0.FrontendIpConfigurations)) {
+                            if ($null -eq $fe0) { continue }
+                            if ($fe0.PublicIpAddress -and $fe0.PublicIpAddress.Id) { $pipIds += [string]$fe0.PublicIpAddress.Id }
+                            if (-not [string]::IsNullOrWhiteSpace([string]$fe0.PrivateIpAddress)) { $privateIps += [string]$fe0.PrivateIpAddress }
+                        }
+
+                        $backendIpConfigIds = @()
+                        foreach ($pool0 in @($ag0.BackendAddressPools)) {
+                            if ($null -eq $pool0) { continue }
+                            foreach ($beip0 in @($pool0.BackendIpConfigurations)) {
+                                if ($null -eq $beip0) { continue }
+                                if (-not [string]::IsNullOrWhiteSpace([string]$beip0.Id)) { $backendIpConfigIds += [string]$beip0.Id }
+                            }
+                        }
+
+                        $agFallbackById[$idLower] = [pscustomobject]@{
+                            id = [string]$ag0.Id
+                            name = [string]$ag0.Name
+                            subscriptionId = $subId
+                            resourceGroup = $rg
+                            location = [string]$ag0.Location
+                            subnetIds = New-TopologySetFromValues -Values $subnetIds
+                            publicIpIds = New-TopologySetFromValues -Values $pipIds
+                            privateIps = New-TopologySetFromValues -Values $privateIps
+                            backendIpConfigIds = New-TopologySetFromValues -Values $backendIpConfigIds
+                        }
+                    }
+                    $appGws = @($agFallbackById.Values)
+                }
+            }
+            else {
+                Write-Verbose 'No Application Gateways returned by ARG and Get-AzApplicationGateway is unavailable; skipping AppGW fallback.'
+            }
+        }
+
+        $appGwById = @{}
+        foreach ($ag in @($appGws)) {
+            if ($null -eq $ag -or [string]::IsNullOrWhiteSpace([string]$ag.id)) { continue }
+            $appGwById[([string]$ag.id).ToLowerInvariant()] = $ag
+        }
+
+        # Azure Firewalls: subnet + publicIP/privateIP
+        $fwQuery = @"
+resources
+| where type =~ 'microsoft.network/azurefirewalls'
+| mv-expand ipconf = properties.ipConfigurations to typeof(dynamic)
+| extend subnetId = tostring(ipconf.properties.subnet.id)
+| extend publicIpId = tostring(ipconf.properties.publicIPAddress.id)
+| extend privateIp = tostring(ipconf.properties.privateIPAddress)
+| summarize subnetIds = make_set(subnetId), publicIpIds = make_set(publicIpId), privateIps = make_set(privateIp) by id, name, subscriptionId, resourceGroup, location
+"@
+        $firewalls = Invoke-WAFQueryOrEmpty -Query $fwQuery -FeatureName 'azureFirewalls'
+
+        if (@($firewalls).Count -eq 0 -and (Test-WAFCanUseAzNetworkFallback)) {
+            $getFwCmd = Get-Command -Name Get-AzFirewall -ErrorAction SilentlyContinue
+            if ($null -ne $getFwCmd) {
+                $fwItems = Get-InventoryItemsByType -ResourceType 'microsoft.network/azurefirewalls'
+                if ($fwItems.Count -gt 0) {
+                    Write-Verbose 'No Azure Firewalls returned by ARG; falling back to Get-AzFirewall (scoped to inventory).'
+                    $fwFallbackById = @{}
+                    foreach ($item in $fwItems) {
+                        $subId = [string]$item.subscriptionId
+                        if (-not (Ensure-WAFSubscriptionContext -SubscriptionId $subId)) { continue }
+
+                        $rg = [string]$item.resourceGroup
+                        $name = [string]$item.name
+                        try {
+                            $fw0 = Get-AzFirewall -ResourceGroupName $rg -Name $name -ErrorAction Stop
+                        }
+                        catch {
+                            Write-Verbose ("Topology enrichment: Get-AzFirewall failed for {0}/{1}. Error: {2}" -f $rg, $name, $_.Exception.Message)
+                            continue
+                        }
+
+                        if ($null -eq $fw0 -or [string]::IsNullOrWhiteSpace([string]$fw0.Id)) { continue }
+                        $idLower = ([string]$fw0.Id).ToLowerInvariant()
+                        if ($fwFallbackById.ContainsKey($idLower)) { continue }
+
+                        $subnetIds = @()
+                        $pipIds = @()
+                        $privateIps = @()
+                        foreach ($ip0 in @($fw0.IpConfigurations)) {
+                            if ($null -eq $ip0) { continue }
+                            if ($ip0.Subnet -and $ip0.Subnet.Id) { $subnetIds += [string]$ip0.Subnet.Id }
+                            if ($ip0.PublicIpAddress -and $ip0.PublicIpAddress.Id) { $pipIds += [string]$ip0.PublicIpAddress.Id }
+                            if (-not [string]::IsNullOrWhiteSpace([string]$ip0.PrivateIpAddress)) { $privateIps += [string]$ip0.PrivateIpAddress }
+                        }
+
+                        $fwFallbackById[$idLower] = [pscustomobject]@{
+                            id = [string]$fw0.Id
+                            name = [string]$fw0.Name
+                            subscriptionId = $subId
+                            resourceGroup = $rg
+                            location = [string]$fw0.Location
+                            subnetIds = New-TopologySetFromValues -Values $subnetIds
+                            publicIpIds = New-TopologySetFromValues -Values $pipIds
+                            privateIps = New-TopologySetFromValues -Values $privateIps
+                        }
+                    }
+                    $firewalls = @($fwFallbackById.Values)
+                }
+            }
+            else {
+                Write-Verbose 'No Azure Firewalls returned by ARG and Get-AzFirewall is unavailable; skipping Firewall fallback.'
+            }
+        }
+
+        $fwById = @{}
+        foreach ($fw in @($firewalls)) {
+            if ($null -eq $fw -or [string]::IsNullOrWhiteSpace([string]$fw.id)) { continue }
+            $fwById[([string]$fw.id).ToLowerInvariant()] = $fw
+        }
+
+        # Virtual Network Gateways: ipConfigs (subnet/publicIP/privateIP) + gateway type
+        $vngQuery = @"
+resources
+| where type =~ 'microsoft.network/virtualnetworkgateways'
+| extend gatewayType = tostring(properties.gatewayType)
+| mv-expand ipconf = properties.ipConfigurations to typeof(dynamic)
+| extend subnetId = tostring(ipconf.properties.subnet.id)
+| extend publicIpId = tostring(ipconf.properties.publicIPAddress.id)
+| extend privateIp = tostring(ipconf.properties.privateIPAddress)
+| summarize gatewayType = any(gatewayType), subnetIds = make_set(subnetId), publicIpIds = make_set(publicIpId), privateIps = make_set(privateIp) by id, name, subscriptionId, resourceGroup, location
+"@
+        $vngs = Invoke-WAFQueryOrEmpty -Query $vngQuery -FeatureName 'virtualNetworkGateways'
+
+        if (@($vngs).Count -eq 0 -and (Test-WAFCanUseAzNetworkFallback)) {
+            $getVngCmd = Get-Command -Name Get-AzVirtualNetworkGateway -ErrorAction SilentlyContinue
+            if ($null -ne $getVngCmd) {
+                $vngItems = Get-InventoryItemsByType -ResourceType 'microsoft.network/virtualnetworkgateways'
+                if ($vngItems.Count -gt 0) {
+                    Write-Verbose 'No Virtual Network Gateways returned by ARG; falling back to Get-AzVirtualNetworkGateway (scoped to inventory).'
+                    $vngFallbackById = @{}
+                    foreach ($item in $vngItems) {
+                        $subId = [string]$item.subscriptionId
+                        if (-not (Ensure-WAFSubscriptionContext -SubscriptionId $subId)) { continue }
+
+                        $rg = [string]$item.resourceGroup
+                        $name = [string]$item.name
+                        try {
+                            $g0 = Get-AzVirtualNetworkGateway -ResourceGroupName $rg -Name $name -ErrorAction Stop
+                        }
+                        catch {
+                            Write-Verbose ("Topology enrichment: Get-AzVirtualNetworkGateway failed for {0}/{1}. Error: {2}" -f $rg, $name, $_.Exception.Message)
+                            continue
+                        }
+
+                        if ($null -eq $g0 -or [string]::IsNullOrWhiteSpace([string]$g0.Id)) { continue }
+                        $idLower = ([string]$g0.Id).ToLowerInvariant()
+                        if ($vngFallbackById.ContainsKey($idLower)) { continue }
+
+                        $subnetIds = @()
+                        $pipIds = @()
+                        $privateIps = @()
+                        foreach ($ip0 in @($g0.IpConfigurations)) {
+                            if ($null -eq $ip0) { continue }
+                            if ($ip0.Subnet -and $ip0.Subnet.Id) { $subnetIds += [string]$ip0.Subnet.Id }
+                            if ($ip0.PublicIpAddress -and $ip0.PublicIpAddress.Id) { $pipIds += [string]$ip0.PublicIpAddress.Id }
+                            if (-not [string]::IsNullOrWhiteSpace([string]$ip0.PrivateIpAddress)) { $privateIps += [string]$ip0.PrivateIpAddress }
+                        }
+
+                        $vngFallbackById[$idLower] = [pscustomobject]@{
+                            id = [string]$g0.Id
+                            name = [string]$g0.Name
+                            subscriptionId = $subId
+                            resourceGroup = $rg
+                            location = [string]$g0.Location
+                            gatewayType = if ([string]::IsNullOrWhiteSpace([string]$g0.GatewayType)) { $null } else { [string]$g0.GatewayType }
+                            subnetIds = New-TopologySetFromValues -Values $subnetIds
+                            publicIpIds = New-TopologySetFromValues -Values $pipIds
+                            privateIps = New-TopologySetFromValues -Values $privateIps
+                        }
+                    }
+                    $vngs = @($vngFallbackById.Values)
+                }
+            }
+            else {
+                Write-Verbose 'No Virtual Network Gateways returned by ARG and Get-AzVirtualNetworkGateway is unavailable; skipping VNG fallback.'
+            }
+        }
+
+        $vngById = @{}
+        foreach ($g in @($vngs)) {
+            if ($null -eq $g -or [string]::IsNullOrWhiteSpace([string]$g.id)) { continue }
+            $vngById[([string]$g.id).ToLowerInvariant()] = $g
+        }
+
+        # NAT Gateways: attached subnets + public IPs / prefixes
+        $natGwQuery = @"
+resources
+| where type =~ 'microsoft.network/natgateways'
+| mv-expand kind=outer sn = properties.subnets to typeof(dynamic)
+| extend subnetId = tostring(sn.id)
+| mv-expand kind=outer pip = properties.publicIpAddresses to typeof(dynamic)
+| extend publicIpId = tostring(pip.id)
+| mv-expand kind=outer pfx = properties.publicIpPrefixes to typeof(dynamic)
+| extend publicIpPrefixId = tostring(pfx.id)
+| summarize subnetIds = make_set(subnetId), publicIpIds = make_set(publicIpId), publicIpPrefixIds = make_set(publicIpPrefixId) by id, name, subscriptionId, resourceGroup, location
+"@
+        $natGws = Invoke-WAFQueryOrEmpty -Query $natGwQuery -FeatureName 'natGateways'
+
+        if (@($natGws).Count -eq 0 -and (Test-WAFCanUseAzNetworkFallback)) {
+            $getNatCmd = Get-Command -Name Get-AzNatGateway -ErrorAction SilentlyContinue
+            if ($null -ne $getNatCmd) {
+                $natItems = Get-InventoryItemsByType -ResourceType 'microsoft.network/natgateways'
+                if ($natItems.Count -gt 0) {
+                    Write-Verbose 'No NAT Gateways returned by ARG; falling back to Get-AzNatGateway (scoped to inventory).'
+                    $natFallbackById = @{}
+                    foreach ($item in $natItems) {
+                        $subId = [string]$item.subscriptionId
+                        if (-not (Ensure-WAFSubscriptionContext -SubscriptionId $subId)) { continue }
+
+                        $rg = [string]$item.resourceGroup
+                        $name = [string]$item.name
+                        try {
+                            $ng0 = Get-AzNatGateway -ResourceGroupName $rg -Name $name -ErrorAction Stop
+                        }
+                        catch {
+                            Write-Verbose ("Topology enrichment: Get-AzNatGateway failed for {0}/{1}. Error: {2}" -f $rg, $name, $_.Exception.Message)
+                            continue
+                        }
+
+                        if ($null -eq $ng0 -or [string]::IsNullOrWhiteSpace([string]$ng0.Id)) { continue }
+                        $idLower = ([string]$ng0.Id).ToLowerInvariant()
+                        if ($natFallbackById.ContainsKey($idLower)) { continue }
+
+                        $subnetIds = @()
+                        foreach ($sn0 in @($ng0.Subnets)) {
+                            if ($null -eq $sn0) { continue }
+                            if (-not [string]::IsNullOrWhiteSpace([string]$sn0.Id)) { $subnetIds += [string]$sn0.Id }
+                        }
+
+                        $pipIds = @()
+                        foreach ($pip0 in @($ng0.PublicIpAddresses)) {
+                            if ($null -eq $pip0) { continue }
+                            if (-not [string]::IsNullOrWhiteSpace([string]$pip0.Id)) { $pipIds += [string]$pip0.Id }
+                        }
+
+                        $pfxIds = @()
+                        foreach ($pfx0 in @($ng0.PublicIpPrefixes)) {
+                            if ($null -eq $pfx0) { continue }
+                            if (-not [string]::IsNullOrWhiteSpace([string]$pfx0.Id)) { $pfxIds += [string]$pfx0.Id }
+                        }
+
+                        $natFallbackById[$idLower] = [pscustomobject]@{
+                            id = [string]$ng0.Id
+                            name = [string]$ng0.Name
+                            subscriptionId = $subId
+                            resourceGroup = $rg
+                            location = [string]$ng0.Location
+                            subnetIds = New-TopologySetFromValues -Values $subnetIds
+                            publicIpIds = New-TopologySetFromValues -Values $pipIds
+                            publicIpPrefixIds = New-TopologySetFromValues -Values $pfxIds
+                        }
+                    }
+                    $natGws = @($natFallbackById.Values)
+                }
+            }
+            else {
+                Write-Verbose 'No NAT Gateways returned by ARG and Get-AzNatGateway is unavailable; skipping NAT gateway fallback.'
+            }
+        }
+
+        $natGwById = @{}
+        foreach ($ng in @($natGws)) {
+            if ($null -eq $ng -or [string]::IsNullOrWhiteSpace([string]$ng.id)) { continue }
+            $natGwById[([string]$ng.id).ToLowerInvariant()] = $ng
+        }
+
+        # ExpressRoute circuits (for naming + diagram nodes)
+        $erCircuitQuery = @"
+resources
+| where type =~ 'microsoft.network/expressroutecircuits'
+| project id, name, subscriptionId, resourceGroup, location
+"@
+        $erCircuits = Invoke-WAFQueryOrEmpty -Query $erCircuitQuery -FeatureName 'expressRouteCircuits'
+
+        if (@($erCircuits).Count -eq 0 -and (Test-WAFCanUseAzNetworkFallback)) {
+            $getErCmd = Get-Command -Name Get-AzExpressRouteCircuit -ErrorAction SilentlyContinue
+            if ($null -ne $getErCmd) {
+                $erItems = Get-InventoryItemsByType -ResourceType 'microsoft.network/expressroutecircuits'
+                if ($erItems.Count -gt 0) {
+                    Write-Verbose 'No ExpressRoute Circuits returned by ARG; falling back to Get-AzExpressRouteCircuit (scoped to inventory).'
+                    $erFallbackById = @{}
+                    foreach ($item in $erItems) {
+                        $subId = [string]$item.subscriptionId
+                        if (-not (Ensure-WAFSubscriptionContext -SubscriptionId $subId)) { continue }
+
+                        $rg = [string]$item.resourceGroup
+                        $name = [string]$item.name
+                        try {
+                            $c0 = Get-AzExpressRouteCircuit -ResourceGroupName $rg -Name $name -ErrorAction Stop
+                        }
+                        catch {
+                            Write-Verbose ("Topology enrichment: Get-AzExpressRouteCircuit failed for {0}/{1}. Error: {2}" -f $rg, $name, $_.Exception.Message)
+                            continue
+                        }
+
+                        if ($null -eq $c0 -or [string]::IsNullOrWhiteSpace([string]$c0.Id)) { continue }
+                        $idLower = ([string]$c0.Id).ToLowerInvariant()
+                        if ($erFallbackById.ContainsKey($idLower)) { continue }
+
+                        $erFallbackById[$idLower] = [pscustomobject]@{
+                            id = [string]$c0.Id
+                            name = [string]$c0.Name
+                            subscriptionId = $subId
+                            resourceGroup = $rg
+                            location = [string]$c0.Location
+                        }
+                    }
+                    $erCircuits = @($erFallbackById.Values)
+                }
+            }
+            else {
+                Write-Verbose 'No ExpressRoute Circuits returned by ARG and Get-AzExpressRouteCircuit is unavailable; skipping ER circuit fallback.'
+            }
+        }
+
+        $erCircuitById = @{}
+        foreach ($c in @($erCircuits)) {
+            if ($null -eq $c -or [string]::IsNullOrWhiteSpace([string]$c.id)) { continue }
+            $erCircuitById[([string]$c.id).ToLowerInvariant()] = $c
+        }
+
+        # Gateway connections: virtualNetworkGateway <-> expressRouteCircuit
+        # Resource type is typically Microsoft.Network/connections with connectionType == ExpressRoute.
+        $erConnQuery = @"
+resources
+| where type =~ 'microsoft.network/connections'
+| extend connectionType = tostring(properties.connectionType)
+| where connectionType =~ 'ExpressRoute'
+| extend vngId = tostring(properties.virtualNetworkGateway1.id)
+| extend erCircuitId = tostring(properties.expressRouteCircuit.id)
+| project id, name, subscriptionId, resourceGroup, location, vngId, erCircuitId
+"@
+        $erConns = Invoke-WAFQueryOrEmpty -Query $erConnQuery -FeatureName 'expressRouteConnections'
+
+        if (@($erConns).Count -eq 0 -and (Test-WAFCanUseAzNetworkFallback)) {
+            $getConnCmd = Get-Command -Name Get-AzVirtualNetworkGatewayConnection -ErrorAction SilentlyContinue
+            if ($null -ne $getConnCmd) {
+                $connItems = Get-InventoryItemsByType -ResourceType 'microsoft.network/connections'
+                if ($connItems.Count -gt 0) {
+                    Write-Verbose 'No ExpressRoute Connections returned by ARG; falling back to Get-AzVirtualNetworkGatewayConnection (scoped to inventory).'
+                    $connFallback = New-Object System.Collections.Generic.List[object]
+                    foreach ($item in $connItems) {
+                        $subId = [string]$item.subscriptionId
+                        if (-not (Ensure-WAFSubscriptionContext -SubscriptionId $subId)) { continue }
+
+                        $rg = [string]$item.resourceGroup
+                        $name = [string]$item.name
+                        try {
+                            $conn0 = Get-AzVirtualNetworkGatewayConnection -ResourceGroupName $rg -Name $name -ErrorAction Stop
+                        }
+                        catch {
+                            Write-Verbose ("Topology enrichment: Get-AzVirtualNetworkGatewayConnection failed for {0}/{1}. Error: {2}" -f $rg, $name, $_.Exception.Message)
+                            continue
+                        }
+
+                        if ($null -eq $conn0) { continue }
+                        if (-not [string]::IsNullOrWhiteSpace([string]$conn0.ConnectionType) -and [string]$conn0.ConnectionType -ne 'ExpressRoute') { continue }
+
+                        $vngId = $null
+                        if ($conn0.VirtualNetworkGateway1 -and $conn0.VirtualNetworkGateway1.Id) { $vngId = [string]$conn0.VirtualNetworkGateway1.Id }
+                        $erCircuitId = $null
+                        if ($conn0.ExpressRouteCircuit -and $conn0.ExpressRouteCircuit.Id) { $erCircuitId = [string]$conn0.ExpressRouteCircuit.Id }
+
+                        if ([string]::IsNullOrWhiteSpace($vngId) -or [string]::IsNullOrWhiteSpace($erCircuitId)) { continue }
+
+                        $connFallback.Add([pscustomobject]@{
+                                id = if ([string]::IsNullOrWhiteSpace([string]$conn0.Id)) { $null } else { [string]$conn0.Id }
+                                name = [string]$conn0.Name
+                                subscriptionId = $subId
+                                resourceGroup = $rg
+                                location = [string]$conn0.Location
+                                vngId = $vngId
+                                erCircuitId = $erCircuitId
+                            })
+                    }
+
+                    $erConns = @($connFallback.ToArray())
+                }
+            }
+            else {
+                Write-Verbose 'No ExpressRoute Connections returned by ARG and Get-AzVirtualNetworkGatewayConnection is unavailable; skipping ER connection fallback.'
+            }
+        }
+        $vngToErCircuitIds = @{}
+        $erCircuitToVngIds = @{}
+        foreach ($c in @($erConns)) {
+            if ($null -eq $c) { continue }
+            if ([string]::IsNullOrWhiteSpace([string]$c.vngId)) { continue }
+            if ([string]::IsNullOrWhiteSpace([string]$c.erCircuitId)) { continue }
+
+            $vngIdLower = ([string]$c.vngId).ToLowerInvariant()
+            $erIdLower = ([string]$c.erCircuitId).ToLowerInvariant()
+
+            if (-not $vngToErCircuitIds.ContainsKey($vngIdLower)) { $vngToErCircuitIds[$vngIdLower] = New-Object System.Collections.Generic.List[string] }
+            if (-not $erCircuitToVngIds.ContainsKey($erIdLower)) { $erCircuitToVngIds[$erIdLower] = New-Object System.Collections.Generic.List[string] }
+
+            $vngToErCircuitIds[$vngIdLower].Add([string]$c.erCircuitId)
+            $erCircuitToVngIds[$erIdLower].Add([string]$c.vngId)
         }
 
         # Private Endpoints: PE -> subnet + targets, and reverse target -> PEs
@@ -303,7 +926,7 @@ resources
 | extend subnetId = tostring(properties.subnet.id)
 | summarize targetIds = make_set(targetId), subnetIds = make_set(subnetId) by id, name, subscriptionId, resourceGroup, location
 "@
-        $pes = Invoke-WAFQuery -Query $peQuery -SubscriptionIds $SubscriptionIds
+        $pes = Invoke-WAFQueryOrEmpty -Query $peQuery -FeatureName 'privateEndpoints'
         $peById = @{}
         $targetToPeIds = @{}
         foreach ($pe in @($pes)) {
@@ -325,7 +948,7 @@ resources
 | extend publicNetworkAccess = tostring(properties.publicNetworkAccess)
 | project id, name, subscriptionId, resourceGroup, location, vnetSubnetId, publicNetworkAccess
 "@
-        $apps = Invoke-WAFQuery -Query $appQuery -SubscriptionIds $SubscriptionIds
+        $apps = Invoke-WAFQueryOrEmpty -Query $appQuery -FeatureName 'appServices'
         $appById = @{}
         foreach ($a in @($apps)) {
             if ($null -eq $a -or [string]::IsNullOrWhiteSpace([string]$a.id)) { continue }
@@ -423,6 +1046,143 @@ resources
                 }
                 $r.topology_publicIpAddresses = Join-StringList -Value $pipAddresses
                 $r.topology_publicFqdns = Join-StringList -Value $pipFqdns
+            }
+
+            function Get-NicIdsFromIpConfigIds {
+                param([object] $IpConfigIds)
+
+                $nicIds = @()
+                foreach ($ipconfId in (Normalize-StringList -Value $IpConfigIds)) {
+                    if ([string]::IsNullOrWhiteSpace([string]$ipconfId)) { continue }
+                    $m = [regex]::Match([string]$ipconfId, '(?i)(.*/providers/Microsoft\.Network/networkInterfaces/[^/]+)')
+                    if ($m.Success) {
+                        $nicIds += [string]$m.Groups[1].Value
+                    }
+                }
+                return @(Normalize-StringList -Value $nicIds)
+            }
+
+            function Get-VmIdsFromNicIds {
+                param([string[]] $NicIds)
+                $vmIds = @()
+                foreach ($nid2 in (Normalize-StringList -Value $NicIds)) {
+                    $n2 = $nicById[$nid2.ToLowerInvariant()]
+                    if ($null -ne $n2 -and -not [string]::IsNullOrWhiteSpace([string]$n2.vmId)) {
+                        $vmIds += [string]$n2.vmId
+                    }
+                }
+                return @(Normalize-StringList -Value $vmIds)
+            }
+
+            function Set-NetworkFromSubnetsAndPips {
+                param(
+                    [object] $Resource,
+                    [object] $SubnetIds,
+                    [object] $PublicIpIds,
+                    [object] $PrivateIps
+                )
+
+                $subnetIds2 = Normalize-StringList -Value $SubnetIds
+                $publicIpIds2 = Normalize-StringList -Value $PublicIpIds
+                $privateIps2 = Normalize-StringList -Value $PrivateIps
+
+                if ($subnetIds2.Count -gt 0) { $Resource.topology_subnetIds = Join-StringList -Value $subnetIds2 }
+                if ($publicIpIds2.Count -gt 0) { $Resource.topology_publicIpIds = Join-StringList -Value $publicIpIds2 }
+                if ($privateIps2.Count -gt 0) { $Resource.topology_privateIps = Join-StringList -Value $privateIps2 }
+
+                $vnetIds2 = @()
+                foreach ($sid2 in $subnetIds2) {
+                    $v = $subnetToVnet[$sid2.ToLowerInvariant()]
+                    if (-not [string]::IsNullOrWhiteSpace($v)) { $vnetIds2 += $v }
+                }
+                if ($vnetIds2.Count -gt 0) { $Resource.topology_vnetIds = Join-StringList -Value $vnetIds2 }
+
+                if ($publicIpIds2.Count -gt 0) {
+                    $pipAddresses2 = @()
+                    $pipFqdns2 = @()
+                    foreach ($pipId2 in $publicIpIds2) {
+                        $p2 = $pipById[$pipId2.ToLowerInvariant()]
+                        if ($null -ne $p2) {
+                            if (-not [string]::IsNullOrWhiteSpace([string]$p2.ipAddress)) { $pipAddresses2 += [string]$p2.ipAddress }
+                            if (-not [string]::IsNullOrWhiteSpace([string]$p2.fqdn)) { $pipFqdns2 += [string]$p2.fqdn }
+                        }
+                    }
+                    $Resource.topology_publicIpAddresses = Join-StringList -Value $pipAddresses2
+                    $Resource.topology_publicFqdns = Join-StringList -Value $pipFqdns2
+                }
+            }
+
+            # If resource is a Load Balancer
+            if ($rtype -ieq 'microsoft.network/loadbalancers' -and $lbById.ContainsKey($rid)) {
+                $lb = $lbById[$rid]
+                Set-NetworkFromSubnetsAndPips -Resource $r -SubnetIds $lb.frontendSubnetIds -PublicIpIds $lb.frontendPublicIpIds -PrivateIps $lb.frontendPrivateIps
+
+                $backendNicIds = Get-NicIdsFromIpConfigIds -IpConfigIds $lb.backendIpConfigIds
+                if ($backendNicIds.Count -gt 0) {
+                    $r.topology_nicIds = Join-StringList -Value $backendNicIds
+
+                    # Helpful: connect LB -> backend VMs too (if resolvable via NIC -> VM)
+                    $backendVmIds = Get-VmIdsFromNicIds -NicIds $backendNicIds
+                    $connected = @($backendNicIds + $backendVmIds)
+                    if ($connected.Count -gt 0) {
+                        $r.topology_connectedResourceIds = Join-StringList -Value $connected
+                    }
+                }
+            }
+
+            # If resource is an Application Gateway
+            if ($rtype -ieq 'microsoft.network/applicationgateways' -and $appGwById.ContainsKey($rid)) {
+                $ag = $appGwById[$rid]
+                Set-NetworkFromSubnetsAndPips -Resource $r -SubnetIds $ag.subnetIds -PublicIpIds $ag.publicIpIds -PrivateIps $ag.privateIps
+
+                $backendNicIds = Get-NicIdsFromIpConfigIds -IpConfigIds $ag.backendIpConfigIds
+                if ($backendNicIds.Count -gt 0) {
+                    $r.topology_nicIds = Join-StringList -Value $backendNicIds
+
+                    $backendVmIds = Get-VmIdsFromNicIds -NicIds $backendNicIds
+                    $connected = @($backendNicIds + $backendVmIds)
+                    if ($connected.Count -gt 0) {
+                        $r.topology_connectedResourceIds = Join-StringList -Value $connected
+                    }
+                }
+            }
+
+            # If resource is an Azure Firewall
+            if ($rtype -ieq 'microsoft.network/azurefirewalls' -and $fwById.ContainsKey($rid)) {
+                $fw = $fwById[$rid]
+                Set-NetworkFromSubnetsAndPips -Resource $r -SubnetIds $fw.subnetIds -PublicIpIds $fw.publicIpIds -PrivateIps $fw.privateIps
+            }
+
+            # If resource is a Virtual Network Gateway
+            if ($rtype -ieq 'microsoft.network/virtualnetworkgateways' -and $vngById.ContainsKey($rid)) {
+                $g = $vngById[$rid]
+                Set-NetworkFromSubnetsAndPips -Resource $r -SubnetIds $g.subnetIds -PublicIpIds $g.publicIpIds -PrivateIps $g.privateIps
+                $r.topology_gatewayType = if ([string]::IsNullOrWhiteSpace([string]$g.gatewayType)) { $null } else { [string]$g.gatewayType }
+
+                if ($vngToErCircuitIds.ContainsKey($rid)) {
+                    $r.topology_expressRouteCircuitIds = Join-StringList -Value $vngToErCircuitIds[$rid]
+
+                    # Also expose as generic connectedResourceIds for downstream renderers.
+                    $r.topology_connectedResourceIds = Join-StringList -Value $vngToErCircuitIds[$rid]
+                }
+            }
+
+            # If resource is a NAT Gateway
+            if ($rtype -ieq 'microsoft.network/natgateways' -and $natGwById.ContainsKey($rid)) {
+                $ng = $natGwById[$rid]
+                Set-NetworkFromSubnetsAndPips -Resource $r -SubnetIds $ng.subnetIds -PublicIpIds $ng.publicIpIds -PrivateIps @()
+                $pfxIds = Normalize-StringList -Value $ng.publicIpPrefixIds
+                if ($pfxIds.Count -gt 0) {
+                    $r.topology_publicIpPrefixIds = Join-StringList -Value $pfxIds
+                }
+            }
+
+            # If resource is an ExpressRoute circuit
+            if ($rtype -ieq 'microsoft.network/expressroutecircuits') {
+                if ($erCircuitToVngIds.ContainsKey($rid)) {
+                    $r.topology_expressRouteGatewayIds = Join-StringList -Value $erCircuitToVngIds[$rid]
+                    $r.topology_connectedResourceIds = Join-StringList -Value $erCircuitToVngIds[$rid]
+                }
             }
 
             # If resource is a Private Endpoint
