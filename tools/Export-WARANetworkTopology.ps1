@@ -12,8 +12,19 @@ network is defined as the set of VNet/Subnet IDs referenced by:
 For each group it selects ONE representative resource (sample) and emits a graph
 model (nodes + edges) suitable for drawing a network diagram without clutter.
 
-.PARAMETER InputJson
-Path to a WARA output JSON file (e.g. output/WARA-File-*.json).
+.PARAMETER InputPath
+Path to either:
+- a WARA output JSON file (e.g. output/WARA-File-*.json) OR
+- a WARA Analyzer Excel file (e.g. Expert-Analysis-v1-*.xlsx).
+
+If the file extension is `.xlsx` (or `.xlsm`), the script reads the `WorkloadInventory` worksheet
+(or `2.WorkloadInventory` / `6.WorkloadInventory`) and parses the `networkConfig` column to
+reconstruct `topology_*` fields.
+
+For other extensions (or no extension), the script treats the file as JSON (default).
+
+.PARAMETER ExcelStartRow
+Row number where the `WorkloadInventory` table header starts. Defaults to 12 (WARA Analyzer default).
 
 .PARAMETER OutputJson
 Optional path to write the graph model JSON.
@@ -21,24 +32,246 @@ Optional path to write the graph model JSON.
 .PARAMETER OutputMd
 Optional path to write a human-readable Markdown summary.
 
+.PARAMETER MermaidByResourceGroup
+When set (default), emit one Mermaid diagram per Resource Group in the Markdown output.
+
+To disable and generate a single high-level Mermaid diagram for the whole inventory, pass
+`-MermaidByResourceGroup:$false`.
+
+
 .EXAMPLE
-pwsh -NoProfile -File .\tools\Export-WARANetworkTopology.ps1 -InputJson .\output\WARA-File-2025-12-24-20-49.json -OutputJson .\output\WARA-NetworkTopology.json -OutputMd .\output\WARA-NetworkTopology.md
+pwsh -NoProfile -File .\tools\Export-WARANetworkTopology.ps1 -InputPath .\output\WARA-File-2025-12-24-20-49.json -OutputJson .\output\WARA-NetworkTopology.json -OutputMd .\output\WARA-NetworkTopology.md
+
+.EXAMPLE
+pwsh -NoProfile -File .\tools\Export-WARANetworkTopology.ps1 -InputPath .\output\WARA-File-2025-12-24-20-49.json -OutputMd .\output\WARA-NetworkTopology.md -MermaidByResourceGroup:$false
+
+.EXAMPLE
+pwsh -NoProfile -File .\tools\Export-WARANetworkTopology.ps1 -InputPath .\output\Expert-Analysis-v1-2025-12-26-00-09.xlsx -OutputMd .\output\WARA-NetworkTopology.md
 #>
 
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
     [ValidateNotNullOrEmpty()]
-    [string]$InputJson,
+    [Alias('Input')]
+    [string]$InputPath,
+
+    [Parameter(Mandatory = $false)]
+    [ValidateRange(1, 1000)]
+    [int]$ExcelStartRow = 12,
 
     [Parameter(Mandatory = $false)]
     [string]$OutputJson,
 
     [Parameter(Mandatory = $false)]
     [string]$OutputMd
+
+    ,
+    [Parameter(Mandatory = $false)]
+    [switch]$MermaidByResourceGroup = $true
 )
 
 Set-StrictMode -Version Latest
+
+function Get-CaseInsensitivePropertyValue {
+    param(
+        [Parameter(Mandatory = $true)][object]$Obj,
+        [Parameter(Mandatory = $true)][string[]]$Names
+    )
+
+    if ($null -eq $Obj) { return $null }
+    foreach ($name in @($Names)) {
+        if ([string]::IsNullOrWhiteSpace($name)) { continue }
+        $p = $Obj.PSObject.Properties | Where-Object { $_.Name -ieq $name } | Select-Object -First 1
+        if ($p) { return $p.Value }
+    }
+    return $null
+}
+
+function Convert-NetworkConfigToHashtable {
+    param([object]$NetworkConfig)
+
+    if ($null -eq $NetworkConfig) { return @{} }
+
+    # Case 1: Already a parsed object (rare but possible)
+    if ($NetworkConfig -isnot [string]) {
+        try {
+            $h = @{}
+            foreach ($p in $NetworkConfig.PSObject.Properties) {
+                if ($null -eq $p -or [string]::IsNullOrWhiteSpace([string]$p.Name)) { continue }
+                $h[[string]$p.Name] = $p.Value
+            }
+            return $h
+        }
+        catch {
+            return @{}
+        }
+    }
+
+    $s = [string]$NetworkConfig
+    if ([string]::IsNullOrWhiteSpace($s)) { return @{} }
+
+    # Case 2: Compressed JSON string
+    $trim = $s.Trim()
+    if ($trim.StartsWith('{') -and $trim.EndsWith('}')) {
+        try {
+            $obj = $trim | ConvertFrom-Json -ErrorAction Stop
+            $h2 = @{}
+            foreach ($p in $obj.PSObject.Properties) {
+                if ($null -eq $p -or [string]::IsNullOrWhiteSpace([string]$p.Name)) { continue }
+                $h2[[string]$p.Name] = $p.Value
+            }
+            return $h2
+        }
+        catch {
+            # Fall through to key=value parsing
+        }
+    }
+
+    # Case 3: Multiline key=value string
+    $h3 = @{}
+    foreach ($line in ($s -split "`r?`n")) {
+        if ([string]::IsNullOrWhiteSpace($line)) { continue }
+        $idx = $line.IndexOf('=')
+        if ($idx -lt 1) { continue }
+        $k = $line.Substring(0, $idx).Trim()
+        $v = $line.Substring($idx + 1).Trim()
+        if ([string]::IsNullOrWhiteSpace($k)) { continue }
+        if ([string]::IsNullOrWhiteSpace($v)) { continue }
+        $h3[$k] = $v
+    }
+    return $h3
+}
+
+function Convert-WorkloadInventoryExcelToResourceInventory {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][int]$StartRow
+    )
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        throw "Input file not found: $Path"
+    }
+
+    if (-not (Get-Command -Name Import-Excel -ErrorAction SilentlyContinue)) {
+        throw "Import-Excel command not found. Install the ImportExcel module (Install-Module ImportExcel -Scope CurrentUser) or use a JSON input (.json)."
+    }
+
+    $worksheetCandidates = @(
+        'WorkloadInventory',
+        '2.WorkloadInventory'
+    )
+
+    $rows = $null
+    foreach ($ws in $worksheetCandidates) {
+        try {
+            # WARA Analyzer exports tables starting at row 12 by default (header row).
+            $rows = Import-Excel -Path $Path -WorksheetName $ws -StartRow $StartRow -ErrorAction Stop
+            if ($rows) { break }
+        }
+        catch {
+            $rows = $null
+        }
+    }
+
+    if (-not $rows) {
+        throw "Could not read WorkloadInventory sheet from Excel. Tried: $($worksheetCandidates -join ', ')"
+    }
+
+    $keyToTopologyProp = @{
+        vnetIds                  = 'topology_vnetIds'
+        subnetIds                = 'topology_subnetIds'
+        subnetPrefixPairs         = 'topology_subnetPrefixPairs'
+        nicIds                   = 'topology_nicIds'
+        privateEndpointIds        = 'topology_privateEndpointIds'
+        privateEndpointSubnetIds  = 'topology_privateEndpointSubnetIds'
+        privateEndpointVnetIds    = 'topology_privateEndpointVnetIds'
+        privateLinkTargetIds      = 'topology_privateLinkTargetIds'
+        connectedResourceIds      = 'topology_connectedResourceIds'
+        publicIpIds               = 'topology_publicIpIds'
+        publicIpAddresses         = 'topology_publicIpAddresses'
+        publicIpPrefixIds         = 'topology_publicIpPrefixIds'
+        publicFqdns               = 'topology_publicFqdns'
+        privateIps                = 'topology_privateIps'
+        publicNetworkAccess       = 'topology_publicNetworkAccess'
+
+        # WARA Analyzer Excel stores these without the topology_ prefix
+        vnetPeeringRemoteVnetIds  = 'topology_vnetPeeringRemoteVnetIds'
+        vnetPeeringDetails        = 'topology_vnetPeeringDetails'
+    }
+
+    $result = New-Object System.Collections.Generic.List[object]
+
+    foreach ($row in @($rows)) {
+        if ($null -eq $row) { continue }
+
+        $id = [string](Get-CaseInsensitivePropertyValue -Obj $row -Names @('id', 'resourceId', 'ResourceId'))
+        $name = [string](Get-CaseInsensitivePropertyValue -Obj $row -Names @('name', 'resourceName', 'ResourceName'))
+        $type = [string](Get-CaseInsensitivePropertyValue -Obj $row -Names @('type', 'resourceType', 'ResourceType'))
+        $location = [string](Get-CaseInsensitivePropertyValue -Obj $row -Names @('location', 'Location'))
+        $resourceGroup = [string](Get-CaseInsensitivePropertyValue -Obj $row -Names @('resourceGroup', 'ResourceGroup', 'resource group', 'Resource Group'))
+        $subscriptionId = [string](Get-CaseInsensitivePropertyValue -Obj $row -Names @('subscriptionId', 'SubscriptionId', 'subscription', 'Subscription'))
+        $tenantId = [string](Get-CaseInsensitivePropertyValue -Obj $row -Names @('tenantId', 'TenantId', 'tenant', 'Tenant'))
+        $networkConfig = Get-CaseInsensitivePropertyValue -Obj $row -Names @('networkConfig', 'NetworkConfig')
+
+        # If a row doesn't have core identity, keep it out of the topology model.
+        if ([string]::IsNullOrWhiteSpace($id) -or [string]::IsNullOrWhiteSpace($type)) { continue }
+
+        # Keep shape compatible with JSON inventory and StrictMode: declare commonly referenced
+        # properties even when networkConfig is empty.
+        $r = [pscustomobject]@{
+            id   = $id
+            name = $name
+            type = $type.ToLowerInvariant()
+
+            tenantId       = $tenantId
+            location       = $location
+            resourceGroup  = $resourceGroup
+            subscriptionId = $subscriptionId
+
+            topology_vnetIds                     = $null
+            topology_subnetIds                   = $null
+            topology_subnetPrefixPairs            = $null
+            topology_nicIds                      = $null
+            topology_privateEndpointIds           = $null
+            topology_privateEndpointSubnetIds     = $null
+            topology_privateEndpointVnetIds       = $null
+            topology_privateLinkTargetIds         = $null
+            topology_connectedResourceIds         = $null
+            topology_publicIpIds                  = $null
+            topology_publicIpAddresses            = $null
+            topology_publicIpPrefixIds            = $null
+            topology_publicFqdns                  = $null
+            topology_privateIps                   = $null
+            topology_publicNetworkAccess          = $null
+            topology_vnetPeeringRemoteVnetIds     = $null
+            topology_vnetPeeringDetails           = $null
+        }
+
+        $nc = Convert-NetworkConfigToHashtable $networkConfig
+        foreach ($k in @($nc.Keys)) {
+            if ([string]::IsNullOrWhiteSpace([string]$k)) { continue }
+            $keyNorm = [string]$k
+            if ($keyToTopologyProp.ContainsKey($keyNorm)) {
+                $propName = $keyToTopologyProp[$keyNorm]
+                $val = $nc[$k]
+                if ($null -ne $val -and -not [string]::IsNullOrWhiteSpace([string]$val)) {
+                    $r | Add-Member -NotePropertyName $propName -NotePropertyValue $val -Force
+                }
+            }
+            elseif ($keyNorm -like 'topology_*') {
+                $val2 = $nc[$k]
+                if ($null -ne $val2 -and -not [string]::IsNullOrWhiteSpace([string]$val2)) {
+                    $r | Add-Member -NotePropertyName $keyNorm -NotePropertyValue $val2 -Force
+                }
+            }
+        }
+
+        $result.Add($r) | Out-Null
+    }
+
+    return $result.ToArray()
+}
 
 function Normalize-IdList {
     param([object]$Value)
@@ -69,52 +302,6 @@ function Normalize-IdList {
     return @($s2.Trim())
 }
 
-function Try-Get-AzSubnetMetadata {
-    param(
-        [string[]]$SubscriptionIds
-    )
-
-    $result = [ordered]@{
-        subnetToPrefix = @{}
-        subnetToVnet    = @{}
-    }
-
-    try {
-        if (-not (Get-Command -Name Search-AzGraph -ErrorAction SilentlyContinue)) { return $result }
-        if (-not (Get-Command -Name Get-AzContext -ErrorAction SilentlyContinue)) { return $result }
-        $ctx = Get-AzContext -ErrorAction SilentlyContinue
-        if (-not $ctx) { return $result }
-
-        $subs = @($SubscriptionIds | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Sort-Object -Unique)
-        if ($subs.Count -eq 0) { return $result }
-
-        $subnetQuery = @"
-resources
-| where type =~ 'microsoft.network/virtualnetworks'
-| mv-expand sn = properties.subnets
-| extend subnetId = tostring(sn.id)
-| extend subnetPrefix = tostring(coalesce(sn.properties.addressPrefix, sn.properties.addressPrefixes[0]))
-| project vnetId = id, subnetId, subnetPrefix
-"@
-
-        $rows = Search-AzGraph -Query $subnetQuery -Subscription $subs -First 1000 -ErrorAction Stop
-        foreach ($row in @($rows)) {
-            if ($null -eq $row) { continue }
-            if ([string]::IsNullOrWhiteSpace([string]$row.subnetId)) { continue }
-            $sid = ([string]$row.subnetId).ToLowerInvariant()
-            $result.subnetToVnet[$sid] = [string]$row.vnetId
-            if (-not [string]::IsNullOrWhiteSpace([string]$row.subnetPrefix)) {
-                $result.subnetToPrefix[$sid] = [string]$row.subnetPrefix
-            }
-        }
-    }
-    catch {
-        # Diagram generation should remain best-effort; don't fail the exporter.
-        return $result
-    }
-
-    return $result
-}
 
 function Get-SubscriptionIdFromArmId {
     param([string]$ResourceId)
@@ -150,27 +337,78 @@ function Join-Ids {
     return ($Ids | Sort-Object -Unique) -join ';'
 }
 
+function Convert-SubnetPrefixPairsToMap {
+    param([object]$Value)
+
+    $map = @{}
+    foreach ($pair in @(Normalize-IdList $Value)) {
+        if ([string]::IsNullOrWhiteSpace([string]$pair)) { continue }
+        $idx = ([string]$pair).IndexOf('|')
+        if ($idx -lt 1) { continue }
+        $sid = ([string]$pair).Substring(0, $idx).Trim()
+        $pfx = ([string]$pair).Substring($idx + 1).Trim()
+        if ([string]::IsNullOrWhiteSpace($sid) -or [string]::IsNullOrWhiteSpace($pfx)) { continue }
+        $map[$sid.ToLowerInvariant()] = $pfx
+    }
+    return $map
+}
+
 function Get-NetworkKey {
     param($r)
 
-    $vnetIds = @(
-        (Normalize-IdList $r.topology_vnetIds) +
-        (Normalize-IdList $r.topology_privateEndpointVnetIds)
-    ) | Sort-Object -Unique
+    # IMPORTANT: For connectivity grouping/diagramming, treat Private Endpoint reverse-mapping fields
+    # (topology_privateEndpointVnetIds / topology_privateEndpointSubnetIds) as *Private Link metadata*.
+    # Do NOT mix them into the general "resource is in this VNet" concept, otherwise a PaaS target will
+    # appear both directly connected to a VNet and also via Private Link (duplicate-looking path).
+    $vnetIds = @(Normalize-IdList $r.topology_vnetIds) | Sort-Object -Unique
+    $subnetIds = @(Normalize-IdList $r.topology_subnetIds) | Sort-Object -Unique
 
-    $subnetIds = @(
-        (Normalize-IdList $r.topology_subnetIds) +
-        (Normalize-IdList $r.topology_privateEndpointSubnetIds)
-    ) | Sort-Object -Unique
+    # Private Link connectivity (reverse mapping for targets): a PaaS resource may not be "in" a VNet
+    # but can still be connected via one or more private endpoints in specific VNets/Subnets.
+    $plVnetIds = @(Normalize-IdList $r.topology_privateEndpointVnetIds) | Sort-Object -Unique
+    $plSubnetIds = @(Normalize-IdList $r.topology_privateEndpointSubnetIds) | Sort-Object -Unique
 
     $v = Join-Ids $vnetIds
     $s = Join-Ids $subnetIds
+    $plv = Join-Ids $plVnetIds
+    $pls = Join-Ids $plSubnetIds
 
-    if ([string]::IsNullOrWhiteSpace($v) -and [string]::IsNullOrWhiteSpace($s)) {
-        return 'no-network'
+    # Internet connectivity signals (offline)
+    $publicIpIds = @(Normalize-IdList (Get-OptionalPropertyValue -Obj $r -Name 'topology_publicIpIds'))
+    $publicIps = @(Normalize-IdList (Get-OptionalPropertyValue -Obj $r -Name 'topology_publicIpAddresses'))
+    $publicFqdns = @(Normalize-IdList (Get-OptionalPropertyValue -Obj $r -Name 'topology_publicFqdns'))
+
+    $publicNetworkAccessRaw = [string](Get-OptionalPropertyValue -Obj $r -Name 'topology_publicNetworkAccess')
+    $publicNetworkAccessNorm = [string]::IsNullOrWhiteSpace($publicNetworkAccessRaw) ? $null : $publicNetworkAccessRaw.Trim().ToLowerInvariant()
+    $pnaEnabled = $false
+    $pnaDisabled = $false
+    if ($publicNetworkAccessNorm) {
+        if ($publicNetworkAccessNorm -in @('enabled', 'true', 'yes')) { $pnaEnabled = $true }
+        if ($publicNetworkAccessNorm -in @('disabled', 'false', 'no')) { $pnaDisabled = $true }
     }
 
-    return "vnet:$v|subnet:$s"
+    $privateEndpointIds = @(Normalize-IdList (Get-OptionalPropertyValue -Obj $r -Name 'topology_privateEndpointIds'))
+    $privateEndpointSubnetIds = @(Normalize-IdList (Get-OptionalPropertyValue -Obj $r -Name 'topology_privateEndpointSubnetIds'))
+    $privateEndpointVnetIds = @(Normalize-IdList (Get-OptionalPropertyValue -Obj $r -Name 'topology_privateEndpointVnetIds'))
+
+    $hasAnyPublicIpOrFqdn = ((@($publicIpIds).Count + @($publicIps).Count + @($publicFqdns).Count) -gt 0)
+
+    # Internet connectivity signals (offline)
+    # Signals (offline-only):
+    # 1) Public IP / Public FQDNs captured during collect/enrich
+    # 2) topology_publicNetworkAccess explicitly enabled/disabled
+    $internetConnected = $false
+    if (-not $pnaDisabled) {
+        $internetConnected = ($hasAnyPublicIpOrFqdn -or $pnaEnabled)
+    }
+    $internetKey = $internetConnected ? 'internet:yes' : 'internet:no'
+
+    if ([string]::IsNullOrWhiteSpace($v) -and [string]::IsNullOrWhiteSpace($s) -and [string]::IsNullOrWhiteSpace($plv) -and [string]::IsNullOrWhiteSpace($pls)) {
+        return "no-network||$internetKey"
+    }
+
+    # Include method-separated keys so same-type resources only group when both network AND connection method match.
+    return "direct:vnet:$v|subnet:$s||privatelink:vnet:$plv|subnet:$pls||$internetKey"
 }
 
 function Get-DisplayNameFromId {
@@ -206,18 +444,532 @@ function Get-ResourceTypeFromId {
     return "{0}/{1}" -f $m.Groups[1].Value, ($types -join '/')
 }
 
-if (-not (Test-Path -LiteralPath $InputJson)) {
-    throw "InputJson not found: $InputJson"
+function Get-GroupSummariesFromInventory {
+    param(
+        [Parameter(Mandatory = $true)][object[]]$InventorySubset
+    )
+
+    # Group by: resource type + connected network key
+    $localGroups = @($InventorySubset | Group-Object -Property @{ Expression = { "{0}|{1}" -f $_.type, (Get-NetworkKey $_) } })
+
+    $groupCounterLocal = 0
+    $groupSummariesLocal = @()
+    $resourceIdToGroupNodeIdLocal = @{}
+
+    foreach ($g in $localGroups) {
+        $groupCounterLocal++
+
+        $items = @($g.Group)
+        if ($items.Count -eq 0) { continue }
+
+        $sample = $items[0]
+        $resourceType = [string]$sample.type
+
+        $groupNodeId = "group:$groupCounterLocal"
+
+        foreach ($it in $items) {
+            if ($null -eq $it) { continue }
+            $rid = [string](Get-OptionalPropertyValue -Obj $it -Name 'id')
+            if ([string]::IsNullOrWhiteSpace($rid)) { continue }
+            $resourceIdToGroupNodeIdLocal[$rid.ToLowerInvariant()] = $groupNodeId
+        }
+
+        $subnetIds = @(
+            (Normalize-IdList $sample.topology_subnetIds)
+        ) | Sort-Object -Unique
+
+        # Derive parent VNets from subnet ids (some subnet-attached resources don't have topology_vnetIds)
+        $derivedVnetIdsFromSubnets = @()
+        foreach ($subnetId in $subnetIds) {
+            $m = [regex]::Match($subnetId, '(?i)(.*/providers/Microsoft\.Network/virtualNetworks/[^/]+)')
+            if ($m.Success) {
+                $derivedVnetIdsFromSubnets += $m.Groups[1].Value
+            }
+        }
+
+        $vnetIds = @()
+        $vnetIds += @(Normalize-IdList $sample.topology_vnetIds)
+        $vnetIds += @($derivedVnetIdsFromSubnets)
+        $vnetIds = @($vnetIds | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Sort-Object -Unique)
+
+        $privateLinkTargetIds = @(Normalize-IdList $sample.topology_privateLinkTargetIds)
+
+        # Internet connectivity signals (offline)
+        $publicIpIds = @(Normalize-IdList (Get-OptionalPropertyValue -Obj $sample -Name 'topology_publicIpIds'))
+        $publicIps = @(Normalize-IdList (Get-OptionalPropertyValue -Obj $sample -Name 'topology_publicIpAddresses'))
+        $publicFqdns = @(Normalize-IdList (Get-OptionalPropertyValue -Obj $sample -Name 'topology_publicFqdns'))
+
+        $publicNetworkAccessRaw = [string](Get-OptionalPropertyValue -Obj $sample -Name 'topology_publicNetworkAccess')
+        $publicNetworkAccessNorm = [string]::IsNullOrWhiteSpace($publicNetworkAccessRaw) ? $null : $publicNetworkAccessRaw.Trim().ToLowerInvariant()
+
+        $privateEndpointIds = @(Normalize-IdList (Get-OptionalPropertyValue -Obj $sample -Name 'topology_privateEndpointIds'))
+        $privateEndpointSubnetIds = @(Normalize-IdList (Get-OptionalPropertyValue -Obj $sample -Name 'topology_privateEndpointSubnetIds'))
+        $privateEndpointVnetIds = @(Normalize-IdList (Get-OptionalPropertyValue -Obj $sample -Name 'topology_privateEndpointVnetIds'))
+
+        $hasPublicIpOrFqdn = (($publicIpIds.Count + $publicIps.Count + $publicFqdns.Count) -gt 0)
+
+        $publicNetworkAccessEnabled = $false
+        $publicNetworkAccessDisabled = $false
+        if ($publicNetworkAccessNorm) {
+            if ($publicNetworkAccessNorm -in @('enabled', 'true', 'yes')) { $publicNetworkAccessEnabled = $true }
+            if ($publicNetworkAccessNorm -in @('disabled', 'false', 'no')) { $publicNetworkAccessDisabled = $true }
+        }
+
+        $internetConnected = $false
+        if (-not $publicNetworkAccessDisabled) {
+            $internetConnected = ($hasPublicIpOrFqdn -or $publicNetworkAccessEnabled)
+        }
+
+        $groupSummariesLocal += [pscustomobject]@{
+            groupId         = $groupNodeId
+            resourceType    = $resourceType
+            count           = $items.Count
+            sampleName      = $sample.name
+            sampleResourceId= $sample.id
+            vnetIds         = $vnetIds
+            subnetIds       = $subnetIds
+            subnetPrefixPairs = (Get-OptionalPropertyValue -Obj $sample -Name 'topology_subnetPrefixPairs')
+            privateLinkTargetIds = $privateLinkTargetIds
+            publicIpIds     = $publicIpIds
+            publicIps       = $publicIps
+            publicFqdns     = $publicFqdns
+            publicNetworkAccess = $publicNetworkAccessRaw
+            privateEndpointIds = $privateEndpointIds
+            privateEndpointSubnetIds = $privateEndpointSubnetIds
+            privateEndpointVnetIds = $privateEndpointVnetIds
+            internetConnected = $internetConnected
+        }
+    }
+
+    return @{
+        groupSummaries          = @($groupSummariesLocal)
+        resourceIdToGroupNodeId = $resourceIdToGroupNodeIdLocal
+    }
 }
 
-$raw = Get-Content -LiteralPath $InputJson -Raw
-$data = $raw | ConvertFrom-Json
+function Get-HighLevelMermaidDiagramLines {
+    param(
+        [Parameter(Mandatory = $true)][object[]]$InventorySubset,
+        [Parameter(Mandatory = $true)][object[]]$GroupSummaries,
+        [Parameter(Mandatory = $true)][hashtable]$ResourceIdToGroupNodeId,
+        [Parameter(Mandatory = $true)][string]$DiagramTitle
+    )
 
-if ($null -eq $data.resourceInventory) {
-    throw "Input JSON does not contain resourceInventory. File: $InputJson"
+    $Lines = New-Object System.Collections.Generic.List[string]
+
+    if (-not [string]::IsNullOrWhiteSpace($DiagramTitle)) {
+        $Lines.Add("### $DiagramTitle") | Out-Null
+        $Lines.Add("") | Out-Null
+    }
+    $Lines.Add('```mermaid') | Out-Null
+    $Lines.Add('flowchart LR') | Out-Null
+
+    function Should-ExcludeGroupFromDiagram {
+        param([Parameter(Mandatory = $true)][object]$GroupSummary)
+
+        $rt = [string]$GroupSummary.resourceType
+        if ([string]::IsNullOrWhiteSpace($rt)) { return $false }
+        $rtNorm = $rt.Trim().ToLowerInvariant()
+
+        # Network interfaces are an implementation detail for VM connectivity; emitting
+        # them in the Mermaid diagram creates redundant nodes/edges.
+        if ($rtNorm -eq 'microsoft.network/networkinterfaces') { return $true }
+
+        return $false
+    }
+
+    $networkResourceTypeAllowlist = @(
+        'microsoft.network/bastionhosts'
+    )
+
+    $groupsWithVnet = @(
+        $GroupSummaries |
+        Where-Object {
+            (Should-ExcludeGroupFromDiagram -GroupSummary $_) -eq $false -and
+            @($_.vnetIds).Count -gt 0 -and (
+                ($_.resourceType -notmatch '(?i)^microsoft\.network/') -or
+                ($networkResourceTypeAllowlist -contains ([string]$_.resourceType).ToLowerInvariant())
+            )
+        }
+    )
+
+    $allVnetIds = @()
+    foreach ($gs2 in $groupsWithVnet) { $allVnetIds += @($gs2.vnetIds) }
+    $allVnetIds = @($allVnetIds | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Sort-Object -Unique)
+
+    # Best-effort map: VNet -> Private Endpoint names (only from the subset inventory)
+    $peNamesByVnetId = @{}
+    foreach ($r in @($InventorySubset)) {
+        if ($null -eq $r) { continue }
+        if ([string]$r.type -ine 'microsoft.network/privateendpoints') { continue }
+
+        $peName = [string](Get-OptionalPropertyValue -Obj $r -Name 'name')
+        if ([string]::IsNullOrWhiteSpace($peName)) { continue }
+
+        $vnetIdsForPe = @(
+            (Normalize-IdList (Get-OptionalPropertyValue -Obj $r -Name 'topology_privateEndpointVnetIds')) +
+            (Normalize-IdList (Get-OptionalPropertyValue -Obj $r -Name 'topology_vnetIds'))
+        ) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Sort-Object -Unique
+
+        foreach ($vid in $vnetIdsForPe) {
+            if (-not $peNamesByVnetId.ContainsKey($vid)) {
+                $peNamesByVnetId[$vid] = New-Object System.Collections.Generic.List[string]
+            }
+            $peNamesByVnetId[$vid].Add($peName)
+        }
+    }
+
+    $mIdVnet = @{}
+    $mIdGroup = @{}
+    $mIdPrivateLinkHub = @{}
+    $vnetCounter = 0
+    $grpCounter = 0
+    $plHubCounter = 0
+    $emittedGroupNodes = @{}
+
+    function Get-MermaidId {
+        param(
+            [Parameter(Mandatory = $true)][hashtable]$Map,
+            [Parameter(Mandatory = $true)][string]$Key,
+            [Parameter(Mandatory = $true)][string]$Prefix,
+            [Parameter(Mandatory = $true)][ref]$CounterRef
+        )
+        if ($Map.ContainsKey($Key)) { return $Map[$Key] }
+        $CounterRef.Value++
+        $id = "{0}{1}" -f $Prefix, $CounterRef.Value
+        $Map[$Key] = $id
+        return $id
+    }
+
+    foreach ($vnetId in $allVnetIds) {
+        $mid = Get-MermaidId -Map $mIdVnet -Key $vnetId -Prefix 'vnet_' -CounterRef ([ref]$vnetCounter)
+        $vnetName = Get-DisplayNameFromId $vnetId
+        $label = ConvertTo-MermaidSafeLabel ("{0}<br/>Virtual Network" -f $vnetName)
+        $Lines.Add(('  {0}["{1}"]' -f $mid, $label)) | Out-Null
+    }
+
+    function Get-GroupMermaidLabel {
+        param([Parameter(Mandatory = $true)][object]$GroupSummary)
+
+        if ([int]$GroupSummary.count -eq 1 -and -not [string]::IsNullOrWhiteSpace([string]$GroupSummary.sampleName)) {
+            return ("{0}<br/>{1}" -f $GroupSummary.sampleName, $GroupSummary.resourceType)
+        }
+        return ("{0}<br/>(x{1})" -f $GroupSummary.resourceType, [int]$GroupSummary.count)
+    }
+
+    foreach ($gs2 in $groupsWithVnet) {
+        $gid = Get-MermaidId -Map $mIdGroup -Key $gs2.groupId -Prefix 'grp_' -CounterRef ([ref]$grpCounter)
+        $gLabel = ConvertTo-MermaidSafeLabel (Get-GroupMermaidLabel -GroupSummary $gs2)
+        $Lines.Add(('  {0}["{1}"]' -f $gid, $gLabel)) | Out-Null
+        $emittedGroupNodes[$gs2.groupId] = $true
+
+        $subnetsByVnetId = @{}
+        $subnetPrefixMap = Convert-SubnetPrefixPairsToMap $gs2.subnetPrefixPairs
+
+        foreach ($subnetId in @($gs2.subnetIds)) {
+            if ([string]::IsNullOrWhiteSpace($subnetId)) { continue }
+            $sidLower = ([string]$subnetId).ToLowerInvariant()
+
+            $parentVnetId = $null
+            $m2 = [regex]::Match([string]$subnetId, '(?i)(.*/providers/Microsoft\.Network/virtualNetworks/[^/]+)')
+            if ($m2.Success) { $parentVnetId = $m2.Groups[1].Value }
+            if ([string]::IsNullOrWhiteSpace($parentVnetId)) { continue }
+
+            $subnetName = Get-DisplayNameFromId $subnetId
+            $prefix = $null
+            if ($subnetPrefixMap.ContainsKey($sidLower)) { $prefix = [string]$subnetPrefixMap[$sidLower] }
+            $text = [string]::IsNullOrWhiteSpace($prefix) ? $subnetName : ("{0} {1}" -f $subnetName, $prefix)
+
+            if (-not $subnetsByVnetId.ContainsKey($parentVnetId)) {
+                $subnetsByVnetId[$parentVnetId] = New-Object System.Collections.Generic.List[string]
+            }
+            $subnetsByVnetId[$parentVnetId].Add($text)
+        }
+
+        foreach ($vnetId in @($gs2.vnetIds | Sort-Object -Unique)) {
+            if ([string]::IsNullOrWhiteSpace($vnetId)) { continue }
+
+            $mid = $mIdVnet[$vnetId]
+            if (-not $mid) {
+                $mid = Get-MermaidId -Map $mIdVnet -Key $vnetId -Prefix 'vnet_' -CounterRef ([ref]$vnetCounter)
+                $vnetName = Get-DisplayNameFromId $vnetId
+                $label = ConvertTo-MermaidSafeLabel ("{0}<br/>Virtual Network" -f $vnetName)
+                $Lines.Add(('  {0}["{1}"]' -f $mid, $label)) | Out-Null
+            }
+
+            $edgeLabel = $null
+            if ($subnetsByVnetId.ContainsKey($vnetId)) {
+                $items = @($subnetsByVnetId[$vnetId] | Sort-Object -Unique)
+                if ($items.Count -gt 0) {
+                    $edgeLabel = ConvertTo-MermaidSafeLabel ($items -join '<br/>')
+                }
+            }
+
+            if ([string]::IsNullOrWhiteSpace($edgeLabel)) {
+                $Lines.Add("  $gid --> $mid") | Out-Null
+            }
+            else {
+                $Lines.Add("  $gid -->|$edgeLabel| $mid") | Out-Null
+            }
+        }
+    }
+
+    $privateLinkGroups = @(
+        $GroupSummaries |
+        Where-Object {
+            (Should-ExcludeGroupFromDiagram -GroupSummary $_) -eq $false -and
+            @($_.privateLinkTargetIds).Count -gt 0
+        }
+    )
+
+    foreach ($plg in $privateLinkGroups) {
+        $subnetsByVnetId = @{}
+        $subnetPrefixMap = Convert-SubnetPrefixPairsToMap $plg.subnetPrefixPairs
+
+        foreach ($subnetId in @($plg.subnetIds)) {
+            if ([string]::IsNullOrWhiteSpace($subnetId)) { continue }
+            $sidLower = ([string]$subnetId).ToLowerInvariant()
+
+            $parentVnetId = $null
+            $m2 = [regex]::Match([string]$subnetId, '(?i)(.*/providers/Microsoft\.Network/virtualNetworks/[^/]+)')
+            if ($m2.Success) { $parentVnetId = $m2.Groups[1].Value }
+            if ([string]::IsNullOrWhiteSpace($parentVnetId)) { continue }
+
+            $subnetName = Get-DisplayNameFromId $subnetId
+            $prefix = $null
+            if ($subnetPrefixMap.ContainsKey($sidLower)) { $prefix = [string]$subnetPrefixMap[$sidLower] }
+            $text = [string]::IsNullOrWhiteSpace($prefix) ? $subnetName : ("{0} {1}" -f $subnetName, $prefix)
+
+            if (-not $subnetsByVnetId.ContainsKey($parentVnetId)) {
+                $subnetsByVnetId[$parentVnetId] = New-Object System.Collections.Generic.List[string]
+            }
+            $subnetsByVnetId[$parentVnetId].Add($text)
+        }
+
+        foreach ($vnetId in @($plg.vnetIds | Sort-Object -Unique)) {
+            if ([string]::IsNullOrWhiteSpace($vnetId)) { continue }
+
+            $vnetMid = $mIdVnet[$vnetId]
+            if (-not $vnetMid) {
+                $vnetMid = Get-MermaidId -Map $mIdVnet -Key $vnetId -Prefix 'vnet_' -CounterRef ([ref]$vnetCounter)
+                $vnetName = Get-DisplayNameFromId $vnetId
+                $vLabel = ConvertTo-MermaidSafeLabel ("{0}<br/>Virtual Network" -f $vnetName)
+                $Lines.Add(('  {0}["{1}"]' -f $vnetMid, $vLabel)) | Out-Null
+            }
+
+            $subnetLabel = $null
+            if ($subnetsByVnetId.ContainsKey($vnetId)) {
+                $items = @($subnetsByVnetId[$vnetId] | Sort-Object -Unique)
+                if ($items.Count -gt 0) { $subnetLabel = ($items -join '<br/>') }
+            }
+
+            $hubMid = $mIdPrivateLinkHub[$vnetId]
+            if (-not $hubMid) {
+                $hubMid = Get-MermaidId -Map $mIdPrivateLinkHub -Key $vnetId -Prefix 'plhub_' -CounterRef ([ref]$plHubCounter)
+
+                $hubNameLines = @()
+                if ($peNamesByVnetId.ContainsKey($vnetId)) {
+                    $hubNameLines = @($peNamesByVnetId[$vnetId] | Sort-Object -Unique)
+                }
+
+                $hubTypeLabel = 'Private Endpoint'
+                $hubLabel = $null
+                if ($hubNameLines.Count -eq 1) {
+                    $hubLabel = "fa:fa-lock $($hubNameLines[0])<br/>$hubTypeLabel"
+                }
+                elseif ($hubNameLines.Count -gt 1) {
+                    $hubLabel = "fa:fa-lock $hubTypeLabel"
+                }
+                else {
+                    $hubLabel = "fa:fa-lock $hubTypeLabel"
+                }
+
+                $hubLabel = ConvertTo-MermaidSafeLabel $hubLabel
+                $Lines.Add(('  {0}["{1}"]' -f $hubMid, $hubLabel)) | Out-Null
+            }
+
+            if ([string]::IsNullOrWhiteSpace($subnetLabel)) {
+                $Lines.Add("  $vnetMid --> $hubMid") | Out-Null
+            }
+            else {
+                $vToHubLabel = ConvertTo-MermaidSafeLabel $subnetLabel
+                $Lines.Add("  $vnetMid -->|$vToHubLabel| $hubMid") | Out-Null
+            }
+
+            foreach ($t in @($plg.privateLinkTargetIds | Sort-Object -Unique)) {
+                if ([string]::IsNullOrWhiteSpace($t)) { continue }
+
+                $targetGroupNodeId = $null
+                $tLower = ([string]$t).ToLowerInvariant()
+                if ($ResourceIdToGroupNodeId.ContainsKey($tLower)) {
+                    $targetGroupNodeId = [string]$ResourceIdToGroupNodeId[$tLower]
+                }
+
+                if (-not [string]::IsNullOrWhiteSpace($targetGroupNodeId)) {
+                    $targetGs = $GroupSummaries | Where-Object { $_.groupId -eq $targetGroupNodeId } | Select-Object -First 1
+                    if ($null -ne $targetGs) {
+                        $targetMid = Get-MermaidId -Map $mIdGroup -Key $targetGs.groupId -Prefix 'grp_' -CounterRef ([ref]$grpCounter)
+                        if (-not $emittedGroupNodes.ContainsKey($targetGs.groupId)) {
+                            $tgLabel = ConvertTo-MermaidSafeLabel (Get-GroupMermaidLabel -GroupSummary $targetGs)
+                            $Lines.Add(('  {0}["{1}"]' -f $targetMid, $tgLabel)) | Out-Null
+                            $emittedGroupNodes[$targetGs.groupId] = $true
+                        }
+
+                        $edgeLabel = ConvertTo-MermaidSafeLabel 'PrivateLink'
+                        $Lines.Add("  $hubMid -.->|$edgeLabel| $targetMid") | Out-Null
+                        continue
+                    }
+                }
+
+                $tMid = 'pl_' + ([Math]::Abs($tLower.GetHashCode()))
+                $tName = Get-DisplayNameFromId $t
+                $tType = Get-ResourceTypeFromId $t
+                $tLabelRaw = [string]::IsNullOrWhiteSpace($tType) ? $tName : ("{0}<br/>{1}" -f $tName, $tType)
+                $tLabel = ConvertTo-MermaidSafeLabel $tLabelRaw
+                $Lines.Add(('  {0}["{1}"]' -f $tMid, $tLabel)) | Out-Null
+                $edgeLabel = ConvertTo-MermaidSafeLabel 'PrivateLink'
+                $Lines.Add("  $hubMid -.->|$edgeLabel| $tMid") | Out-Null
+            }
+        }
+    }
+
+    # VNet peering edges (best-effort, within subset inventory)
+    $peeringPairs = @{}
+    foreach ($r in $InventorySubset) {
+        if ($null -eq $r -or [string]::IsNullOrWhiteSpace([string]$r.id)) { continue }
+        if ([string]$r.type -ine 'microsoft.network/virtualnetworks') { continue }
+        $localVnetId = [string]$r.id
+        $remoteVnetIds = Normalize-IdList (Get-OptionalPropertyValue -Obj $r -Name 'topology_vnetPeeringRemoteVnetIds')
+        foreach ($remote in $remoteVnetIds) {
+            if ([string]::IsNullOrWhiteSpace($remote)) { continue }
+            $a = $localVnetId.ToLowerInvariant()
+            $b = ([string]$remote).ToLowerInvariant()
+            $k = ($a -lt $b) ? ("$a|$b") : ("$b|$a")
+            $peeringPairs[$k] = @($localVnetId, [string]$remote)
+        }
+    }
+
+    foreach ($pair in $peeringPairs.Values) {
+        $left = [string]$pair[0]
+        $right = [string]$pair[1]
+
+        $lmid = $mIdVnet[$left]
+        if (-not $lmid) {
+            $lmid = Get-MermaidId -Map $mIdVnet -Key $left -Prefix 'vnet_' -CounterRef ([ref]$vnetCounter)
+            $vnetName = Get-DisplayNameFromId $left
+            $label = ConvertTo-MermaidSafeLabel ("{0}<br/>Virtual Network" -f $vnetName)
+            $Lines.Add(('  {0}["{1}"]' -f $lmid, $label)) | Out-Null
+        }
+
+        $rmid = $mIdVnet[$right]
+        if (-not $rmid) {
+            $rmid = Get-MermaidId -Map $mIdVnet -Key $right -Prefix 'vnet_' -CounterRef ([ref]$vnetCounter)
+            $vnetName = Get-DisplayNameFromId $right
+            $label = ConvertTo-MermaidSafeLabel ("{0}<br/>Virtual Network" -f $vnetName)
+            $Lines.Add(('  {0}["{1}"]' -f $rmid, $label)) | Out-Null
+        }
+
+        if ($lmid -ne $rmid) {
+            $Lines.Add("  $lmid ---|peering| $rmid") | Out-Null
+        }
+    }
+
+    $groupsWithInternet = @(
+        $GroupSummaries |
+        Where-Object {
+            (Should-ExcludeGroupFromDiagram -GroupSummary $_) -eq $false -and
+            $_.internetConnected -eq $true -and (
+                ($_.resourceType -notmatch '(?i)^microsoft\\.network/') -or
+                ($networkResourceTypeAllowlist -contains ([string]$_.resourceType).ToLowerInvariant())
+            )
+        }
+    )
+
+    if ($groupsWithInternet.Count -gt 0) {
+        $internetMid = 'internet_public'
+        $internetLabel = ConvertTo-MermaidSafeLabel 'Public Internet'
+        $Lines.Add(('  {0}["{1}"]' -f $internetMid, $internetLabel)) | Out-Null
+
+        foreach ($gsInternet in $groupsWithInternet) {
+            $gid = Get-MermaidId -Map $mIdGroup -Key $gsInternet.groupId -Prefix 'grp_' -CounterRef ([ref]$grpCounter)
+            if (-not $emittedGroupNodes.ContainsKey($gsInternet.groupId)) {
+                $gLabel = ConvertTo-MermaidSafeLabel (Get-GroupMermaidLabel -GroupSummary $gsInternet)
+                $Lines.Add(('  {0}["{1}"]' -f $gid, $gLabel)) | Out-Null
+                $emittedGroupNodes[$gsInternet.groupId] = $true
+            }
+
+            # Prefer showing actual public IP(s) on the edge when this is a single resource.
+            # Falls back to a generic label when we don't have offline public IP data.
+            $edgeLabelRaw = 'Internet'
+            if ([int]$gsInternet.count -eq 1) {
+                $pubIpsArr = @(@($gsInternet.publicIps) | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) } | Sort-Object -Unique)
+                $pubIpsCount = $pubIpsArr.Length
+                if ($pubIpsCount -gt 0) {
+                    if ($pubIpsCount -eq 1) {
+                        $edgeLabelRaw = [string]$pubIpsArr[0]
+                    }
+                    else {
+                        $edgeLabelRaw = ("{0}<br/>..." -f [string]$pubIpsArr[0])
+                    }
+                }
+            }
+
+            $edgeLabel = ConvertTo-MermaidSafeLabel $edgeLabelRaw
+            $Lines.Add("  $gid -->|$edgeLabel| $internetMid") | Out-Null
+        }
+    }
+
+    $Lines.Add('```') | Out-Null
+    $Lines.Add('') | Out-Null
+
+    # If we only emitted an empty diagram (no nodes/edges beyond flowchart), suppress it.
+    # Mermaid diagram skeleton is always:
+    #   ```mermaid
+    #   flowchart LR
+    #   ```
+    $hasAnyGraphItems = @(
+        $Lines |
+        Where-Object {
+            $_ -match '^\s{2,}\S' -and
+            $_ -notmatch '^\s*flowchart\s'
+        }
+    ).Count -gt 0
+
+    if (-not $hasAnyGraphItems) {
+        return @()
+    }
+
+    return @($Lines)
 }
 
-$inventory = @($data.resourceInventory)
+# Allow dot-sourcing for unit testing and reuse of helper functions.
+# When dot-sourced, we only define functions and skip script execution.
+if ($MyInvocation.InvocationName -ne '.') {
+    $sourceLabel = $null
+
+    if (-not (Test-Path -LiteralPath $InputPath)) {
+        throw "Input not found: $InputPath"
+    }
+
+    $sourceLabel = $InputPath
+    $ext = [System.IO.Path]::GetExtension($InputPath)
+    if ($null -eq $ext) { $ext = '' }
+    $ext = $ext.ToLowerInvariant()
+
+    if ($ext -in @('.xlsx', '.xlsm')) {
+        $inventory = Convert-WorkloadInventoryExcelToResourceInventory -Path $InputPath -StartRow $ExcelStartRow
+        $data = [pscustomobject]@{ resourceInventory = $inventory }
+    }
+    else {
+        $raw = Get-Content -LiteralPath $InputPath -Raw
+        $data = $raw | ConvertFrom-Json
+
+        if ($null -eq $data.resourceInventory) {
+            throw "Input JSON does not contain resourceInventory. File: $InputPath"
+        }
+
+        $inventory = @($data.resourceInventory)
+    }
 
 # Group by: resource type + connected network key
 $groups = $inventory | Group-Object -Property @{ Expression = { "{0}|{1}" -f $_.type, (Get-NetworkKey $_) } }
@@ -280,6 +1032,7 @@ function Add-Edge {
 # Build network nodes and group nodes
 $groupCounter = 0
 $groupSummaries = New-Object System.Collections.Generic.List[object]
+$resourceIdToGroupNodeId = @{}
 
 foreach ($g in $groups) {
     $groupCounter++
@@ -304,15 +1057,36 @@ foreach ($g in $groups) {
         sampleLocation   = $sample.location
     }
 
-    $vnetIds = @(
-        (Normalize-IdList $sample.topology_vnetIds) +
-        (Normalize-IdList $sample.topology_privateEndpointVnetIds)
-    ) | Sort-Object -Unique
+    # Index every resource id -> group node id so Mermaid can reuse group nodes
+    # for Private Link targets (avoids drawing the same resource twice as grp_* and pl_*).
+    foreach ($it in $items) {
+        if ($null -eq $it) { continue }
+        $rid = [string](Get-OptionalPropertyValue -Obj $it -Name 'id')
+        if ([string]::IsNullOrWhiteSpace($rid)) { continue }
+        $resourceIdToGroupNodeId[$rid.ToLowerInvariant()] = $groupNodeId
+    }
 
     $subnetIds = @(
-        (Normalize-IdList $sample.topology_subnetIds) +
-        (Normalize-IdList $sample.topology_privateEndpointSubnetIds)
+        (Normalize-IdList $sample.topology_subnetIds)
     ) | Sort-Object -Unique
+
+    # Some resources (e.g., BastionHosts/NAT gateways) are subnet-attached and may not have
+    # topology_vnetIds populated. Derive parent VNets from subnet ARM ids so the high-level
+    # Mermaid can still show group -> VNet connectivity offline.
+    $derivedVnetIdsFromSubnets = @()
+    foreach ($subnetId in $subnetIds) {
+        $m = [regex]::Match($subnetId, '(?i)(.*/providers/Microsoft\.Network/virtualNetworks/[^/]+)')
+        if ($m.Success) {
+            $derivedVnetIdsFromSubnets += $m.Groups[1].Value
+        }
+    }
+
+    # Build a stable list of VNet IDs. Avoid accidental string concatenation when both sources
+    # happen to be single-valued.
+    $vnetIds = @()
+    $vnetIds += @(Normalize-IdList $sample.topology_vnetIds)
+    $vnetIds += @($derivedVnetIdsFromSubnets)
+    $vnetIds = @($vnetIds | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Sort-Object -Unique)
 
     $privateLinkTargetIds = @(Normalize-IdList $sample.topology_privateLinkTargetIds)
 
@@ -353,12 +1127,37 @@ foreach ($g in $groups) {
         Add-Edge -From $groupNodeId -To $targetNodeId -Relation 'private_endpoint_to'
     }
 
-    # Optional: public IP presence -> a Public Internet node, for diagram readability
+    # Optional: public Internet connectivity (offline)
+    # Signals (offline-only):
+    # 1) Public IP / Public FQDNs captured during collect/enrich
+    # 2) topology_publicNetworkAccess explicitly enabled
+    # 3) topology_publicNetworkAccess explicitly disabled
     $publicIpIds = @(Normalize-IdList $sample.topology_publicIpIds)
     $publicIps = @(Normalize-IdList $sample.topology_publicIpAddresses)
     $publicFqdns = @(Normalize-IdList $sample.topology_publicFqdns)
 
-    if (($publicIpIds.Count + $publicIps.Count + $publicFqdns.Count) -gt 0) {
+    $publicNetworkAccessRaw = [string](Get-OptionalPropertyValue -Obj $sample -Name 'topology_publicNetworkAccess')
+    $publicNetworkAccessNorm = [string]::IsNullOrWhiteSpace($publicNetworkAccessRaw) ? $null : $publicNetworkAccessRaw.Trim().ToLowerInvariant()
+
+    $privateEndpointIds = @(Normalize-IdList (Get-OptionalPropertyValue -Obj $sample -Name 'topology_privateEndpointIds'))
+    $privateEndpointSubnetIds = @(Normalize-IdList (Get-OptionalPropertyValue -Obj $sample -Name 'topology_privateEndpointSubnetIds'))
+    $privateEndpointVnetIds = @(Normalize-IdList (Get-OptionalPropertyValue -Obj $sample -Name 'topology_privateEndpointVnetIds'))
+
+    $hasPublicIpOrFqdn = (($publicIpIds.Count + $publicIps.Count + $publicFqdns.Count) -gt 0)
+
+    $publicNetworkAccessEnabled = $false
+    $publicNetworkAccessDisabled = $false
+    if ($publicNetworkAccessNorm) {
+        if ($publicNetworkAccessNorm -in @('enabled', 'true', 'yes')) { $publicNetworkAccessEnabled = $true }
+        if ($publicNetworkAccessNorm -in @('disabled', 'false', 'no')) { $publicNetworkAccessDisabled = $true }
+    }
+
+    $internetConnected = $false
+    if (-not $publicNetworkAccessDisabled) {
+        $internetConnected = ($hasPublicIpOrFqdn -or $publicNetworkAccessEnabled)
+    }
+
+    if ($internetConnected) {
         Add-Node -Id 'internet:public' -Kind 'internet' -Label 'Public Internet' -Props $null
         Add-Edge -From $groupNodeId -To 'internet:public' -Relation 'publicly_exposed'
     }
@@ -371,15 +1170,21 @@ foreach ($g in $groups) {
         sampleResourceId= $sample.id
         vnetIds         = $vnetIds
         subnetIds       = $subnetIds
+        subnetPrefixPairs = (Get-OptionalPropertyValue -Obj $sample -Name 'topology_subnetPrefixPairs')
         privateLinkTargetIds = $privateLinkTargetIds
         publicIpIds     = $publicIpIds
         publicIps       = $publicIps
         publicFqdns     = $publicFqdns
+        publicNetworkAccess = $publicNetworkAccessRaw
+        privateEndpointIds = $privateEndpointIds
+        privateEndpointSubnetIds = $privateEndpointSubnetIds
+        privateEndpointVnetIds = $privateEndpointVnetIds
+        internetConnected = $internetConnected
     })) | Out-Null
 }
 
 $model = [pscustomobject]([ordered]@{
-    sourceFile = $InputJson
+    sourceFile = $sourceLabel
     generatedAt = (Get-Date).ToString('s')
     nodeCount = $nodes.Count
     edgeCount = $edges.Count
@@ -406,355 +1211,49 @@ if ($OutputMd) {
     $lines = New-Object System.Collections.Generic.List[string]
     $lines.Add("# WARA Network Topology (Deduped)") | Out-Null
     $lines.Add("") | Out-Null
-    $lines.Add("- Source: $InputJson") | Out-Null
+    $lines.Add("- Source: $sourceLabel") | Out-Null
     $lines.Add("- Generated: $((Get-Date).ToString('s'))") | Out-Null
     $lines.Add("- Groups: $($groups.Count)") | Out-Null
     $lines.Add("- Nodes: $($nodes.Count)") | Out-Null
     $lines.Add("- Edges: $($edges.Count)") | Out-Null
     $lines.Add("") | Out-Null
 
-    # ------------------------------
-    # High-level Mermaid topology
-    # Only show: resource-group (deduped) -> VNet, subnet prefixes (if resolvable), and VNet peerings.
-    # ------------------------------
-    $lines.Add("## Mermaid Topology Diagram (High-level)") | Out-Null
-    $lines.Add("") | Out-Null
-    $lines.Add('```mermaid') | Out-Null
-    $lines.Add("flowchart LR") | Out-Null
+    if ($MermaidByResourceGroup) {
+        $lines.Add('## Mermaid Topology Diagram (By Resource Group)') | Out-Null
+        $lines.Add('') | Out-Null
 
-    # Keep the Mermaid diagram high-level: show workload resources -> VNet.
-    # Exclude Microsoft.Network/* resource groups (NICs, PEs, etc.) to reduce noise.
-    $groupsWithVnet = @(
-        $groupSummaries |
-        Where-Object { @($_.vnetIds).Count -gt 0 -and ($_.resourceType -notmatch '(?i)^microsoft\.network/') }
-    )
-    $allVnetIds = @()
-    foreach ($gs2 in $groupsWithVnet) { $allVnetIds += @($gs2.vnetIds) }
-    $allVnetIds = @($allVnetIds | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Sort-Object -Unique)
+        $rgKeyByName = @{}
+        foreach ($r in @($inventory)) {
+            if ($null -eq $r) { continue }
+            $rg = [string](Get-OptionalPropertyValue -Obj $r -Name 'resourceGroup')
+            $key = [string]::IsNullOrWhiteSpace($rg) ? '(no resourceGroup)' : $rg
+            $rgKeyByName[$key] = $true
+        }
 
-    # Collect subscription IDs from known resource IDs (best-effort)
-    $subsForLookup = @()
-    foreach ($vid in $allVnetIds) { $subsForLookup += (Get-SubscriptionIdFromArmId $vid) }
-    # Include subnet IDs from all groups so we can annotate Private Endpoint subnet prefixes too.
-    foreach ($gs2 in $groupSummaries) { foreach ($sid2 in @($gs2.subnetIds)) { $subsForLookup += (Get-SubscriptionIdFromArmId $sid2) } }
-    $subsForLookup = @($subsForLookup | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Sort-Object -Unique)
+        $rgNames = @($rgKeyByName.Keys | Sort-Object)
+        foreach ($rgName in $rgNames) {
+            $subset = @(
+                $inventory |
+                Where-Object {
+                    $rg = [string](Get-OptionalPropertyValue -Obj $_ -Name 'resourceGroup')
+                    $key = [string]::IsNullOrWhiteSpace($rg) ? '(no resourceGroup)' : $rg
+                    $key -eq $rgName
+                }
+            )
 
-    $subnetMeta = Try-Get-AzSubnetMetadata -SubscriptionIds $subsForLookup
-    $subnetToPrefix = $subnetMeta.subnetToPrefix
-    $subnetToVnet = $subnetMeta.subnetToVnet
-
-    # Build a best-effort map of VNet -> Private Endpoint names so the diagram can show the
-    # actual Private Link connection name(s) instead of a generic label.
-    $peNamesByVnetId = @{}
-    foreach ($r in @($inventory)) {
-        if ($null -eq $r) { continue }
-        if ([string]$r.type -ine 'microsoft.network/privateendpoints') { continue }
-
-        $peName = [string](Get-OptionalPropertyValue -Obj $r -Name 'name')
-        if ([string]::IsNullOrWhiteSpace($peName)) { continue }
-
-        $vnetIdsForPe = @(
-            (Normalize-IdList (Get-OptionalPropertyValue -Obj $r -Name 'topology_privateEndpointVnetIds')) +
-            (Normalize-IdList (Get-OptionalPropertyValue -Obj $r -Name 'topology_vnetIds'))
-        ) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Sort-Object -Unique
-
-        foreach ($vid in $vnetIdsForPe) {
-            if (-not $peNamesByVnetId.ContainsKey($vid)) {
-                $peNamesByVnetId[$vid] = New-Object System.Collections.Generic.List[string]
-            }
-            $peNamesByVnetId[$vid].Add($peName)
+            $local = Get-GroupSummariesFromInventory -InventorySubset $subset
+            $localGroupSummaries = @($local['groupSummaries'])
+            $localResourceIdToGroupNodeId = [hashtable]$local['resourceIdToGroupNodeId']
+            $diagramLines = Get-HighLevelMermaidDiagramLines -InventorySubset $subset -GroupSummaries $localGroupSummaries -ResourceIdToGroupNodeId $localResourceIdToGroupNodeId -DiagramTitle ("Resource Group: {0}" -f $rgName)
+            foreach ($dl in @($diagramLines)) { $lines.Add([string]$dl) | Out-Null }
         }
     }
-
-    # Mermaid IDs
-    $mIdVnet = @{}
-    $mIdSubnet = @{}
-    $mIdGroup = @{}
-    $mIdPlTarget = @{}
-    $mIdPrivateLinkHub = @{}
-    $vnetCounter = 0
-    $subnetCounter = 0
-    $grpCounter = 0
-    $plTargetCounter = 0
-    $plHubCounter = 0
-
-    function Get-MermaidId {
-        param(
-            [Parameter(Mandatory = $true)][hashtable]$Map,
-            [Parameter(Mandatory = $true)][string]$Key,
-            [Parameter(Mandatory = $true)][string]$Prefix,
-            [Parameter(Mandatory = $true)][ref]$CounterRef
-        )
-        if ($Map.ContainsKey($Key)) { return $Map[$Key] }
-        $CounterRef.Value++
-        $id = "{0}{1}" -f $Prefix, $CounterRef.Value
-        $Map[$Key] = $id
-        return $id
+    else {
+        $lines.Add('## Mermaid Topology Diagram (High-level)') | Out-Null
+        $lines.Add('') | Out-Null
+        $diagramLines = Get-HighLevelMermaidDiagramLines -InventorySubset @($inventory) -GroupSummaries @($groupSummaries) -ResourceIdToGroupNodeId $resourceIdToGroupNodeId -DiagramTitle ''
+        foreach ($dl in $diagramLines) { $lines.Add([string]$dl) | Out-Null }
     }
-
-    # Emit VNet nodes
-    foreach ($vnetId in $allVnetIds) {
-        $mid = Get-MermaidId -Map $mIdVnet -Key $vnetId -Prefix 'vnet_' -CounterRef ([ref]$vnetCounter)
-        $vnetName = Get-DisplayNameFromId $vnetId
-        $label = ConvertTo-MermaidSafeLabel ("{0}<br/>Virtual Network" -f $vnetName)
-        $lines.Add("  $mid[`"$label`"]") | Out-Null
-    }
-
-    # Emit group nodes + group->vnet edges
-    foreach ($gs2 in $groupsWithVnet) {
-        $gid = Get-MermaidId -Map $mIdGroup -Key $gs2.groupId -Prefix 'grp_' -CounterRef ([ref]$grpCounter)
-        $gLabelRaw = $null
-        if ([int]$gs2.count -eq 1 -and -not [string]::IsNullOrWhiteSpace([string]$gs2.sampleName)) {
-            $gLabelRaw = "{0}<br/>{1}" -f $gs2.sampleName, $gs2.resourceType
-        }
-        else {
-            $gLabelRaw = [string]$gs2.resourceType
-        }
-        $gLabel = ConvertTo-MermaidSafeLabel $gLabelRaw
-        $lines.Add("  $gid[`"$gLabel`"]") | Out-Null
-
-        # Pre-compute subnet info by parent VNet so we can annotate the edge.
-        $subnetsByVnetId = @{}
-        foreach ($subnetId in @($gs2.subnetIds)) {
-            if ([string]::IsNullOrWhiteSpace($subnetId)) { continue }
-            $sidLower = ([string]$subnetId).ToLowerInvariant()
-
-            $parentVnetId = $null
-            if ($subnetToVnet.ContainsKey($sidLower)) {
-                $parentVnetId = [string]$subnetToVnet[$sidLower]
-            }
-            else {
-                $m2 = [regex]::Match([string]$subnetId, '(?i)(.*/providers/Microsoft\.Network/virtualNetworks/[^/]+)')
-                if ($m2.Success) { $parentVnetId = $m2.Groups[1].Value }
-            }
-
-            if ([string]::IsNullOrWhiteSpace($parentVnetId)) { continue }
-
-            $subnetName = Get-DisplayNameFromId $subnetId
-            $prefix = $null
-            if ($subnetToPrefix.ContainsKey($sidLower)) { $prefix = [string]$subnetToPrefix[$sidLower] }
-            $text = $prefix ? ("{0} {1}" -f $subnetName, $prefix) : $subnetName
-
-            if (-not $subnetsByVnetId.ContainsKey($parentVnetId)) {
-                $subnetsByVnetId[$parentVnetId] = New-Object System.Collections.Generic.List[string]
-            }
-            $subnetsByVnetId[$parentVnetId].Add($text)
-        }
-
-        foreach ($vnetId in @($gs2.vnetIds | Sort-Object -Unique)) {
-            if ([string]::IsNullOrWhiteSpace($vnetId)) { continue }
-            $mid = $mIdVnet[$vnetId]
-            if (-not $mid) {
-                $mid = Get-MermaidId -Map $mIdVnet -Key $vnetId -Prefix 'vnet_' -CounterRef ([ref]$vnetCounter)
-                $vnetName = Get-DisplayNameFromId $vnetId
-                $label = ConvertTo-MermaidSafeLabel ("{0}<br/>Virtual Network" -f $vnetName)
-                $lines.Add("  $mid[`"$label`"]") | Out-Null
-            }
-
-            $edgeLabel = $null
-            if ($subnetsByVnetId.ContainsKey($vnetId)) {
-                $items = @($subnetsByVnetId[$vnetId] | Sort-Object -Unique)
-                if ($items.Count -gt 0) {
-                    $edgeLabel = ConvertTo-MermaidSafeLabel ($items -join '<br/>')
-                }
-            }
-
-            if ([string]::IsNullOrWhiteSpace($edgeLabel)) {
-                $lines.Add("  $gid --> $mid") | Out-Null
-            }
-            else {
-                # Put subnet+prefix info on the edge (preferred by user)
-                $lines.Add("  $gid -->|$edgeLabel| $mid") | Out-Null
-            }
-        }
-    }
-
-    # Emit Private Link relationships (best-effort)
-    # We keep the diagram high-level by adding a "Private Link" hub node per VNet and routing
-    # VNet -> Private Link -> PaaS target. This avoids drawing Private Endpoint resources directly.
-    $privateLinkGroups = @(
-        $groupSummaries |
-        Where-Object { @($_.privateLinkTargetIds).Count -gt 0 }
-    )
-
-    foreach ($plg in $privateLinkGroups) {
-        $subnetsByVnetId = @{}
-
-        foreach ($subnetId in @($plg.subnetIds)) {
-            if ([string]::IsNullOrWhiteSpace($subnetId)) { continue }
-            $sidLower = ([string]$subnetId).ToLowerInvariant()
-
-            $parentVnetId = $null
-            if ($subnetToVnet.ContainsKey($sidLower)) {
-                $parentVnetId = [string]$subnetToVnet[$sidLower]
-            }
-            else {
-                $m2 = [regex]::Match([string]$subnetId, '(?i)(.*/providers/Microsoft\.Network/virtualNetworks/[^/]+)')
-                if ($m2.Success) { $parentVnetId = $m2.Groups[1].Value }
-            }
-
-            if ([string]::IsNullOrWhiteSpace($parentVnetId)) { continue }
-
-            $subnetName = Get-DisplayNameFromId $subnetId
-            $prefix = $null
-            if ($subnetToPrefix.ContainsKey($sidLower)) { $prefix = [string]$subnetToPrefix[$sidLower] }
-            $text = $prefix ? ("{0} {1}" -f $subnetName, $prefix) : $subnetName
-
-            if (-not $subnetsByVnetId.ContainsKey($parentVnetId)) {
-                $subnetsByVnetId[$parentVnetId] = New-Object System.Collections.Generic.List[string]
-            }
-            $subnetsByVnetId[$parentVnetId].Add($text)
-        }
-
-        foreach ($vnetId in @($plg.vnetIds | Sort-Object -Unique)) {
-            if ([string]::IsNullOrWhiteSpace($vnetId)) { continue }
-
-            $vnetMid = $mIdVnet[$vnetId]
-            if (-not $vnetMid) {
-                $vnetMid = Get-MermaidId -Map $mIdVnet -Key $vnetId -Prefix 'vnet_' -CounterRef ([ref]$vnetCounter)
-                $vnetName = Get-DisplayNameFromId $vnetId
-                $vLabel = ConvertTo-MermaidSafeLabel ("{0}<br/>Virtual Network" -f $vnetName)
-                $lines.Add("  $vnetMid[`"$vLabel`"]") | Out-Null
-            }
-
-            $subnetLabel = $null
-            if ($subnetsByVnetId.ContainsKey($vnetId)) {
-                $items = @($subnetsByVnetId[$vnetId] | Sort-Object -Unique)
-                if ($items.Count -gt 0) {
-                    $subnetLabel = ($items -join '<br/>')
-                }
-            }
-
-            # One Private Link hub per VNet, reused across all targets.
-            $hubMid = $mIdPrivateLinkHub[$vnetId]
-            if (-not $hubMid) {
-                $hubMid = Get-MermaidId -Map $mIdPrivateLinkHub -Key $vnetId -Prefix 'plhub_' -CounterRef ([ref]$plHubCounter)
-                # Mermaid supports Font Awesome icons via fa:fa-*
-                $hubNameLines = @()
-                if ($peNamesByVnetId.ContainsKey($vnetId)) {
-                    $hubNameLines = @($peNamesByVnetId[$vnetId] | Sort-Object -Unique)
-                }
-
-                $hubLabel = $null
-                $hubTypeLabel = 'Private Endpoint'
-                if ($hubNameLines.Count -eq 1) {
-                    $hubLabel = "fa:fa-lock $($hubNameLines[0])<br/>$hubTypeLabel"
-                }
-                elseif ($hubNameLines.Count -gt 1) {
-                    $hubLabel = "fa:fa-lock $hubTypeLabel"
-                }
-                else {
-                    $hubLabel = "fa:fa-lock $hubTypeLabel"
-                }
-
-                $hubLabel = ConvertTo-MermaidSafeLabel $hubLabel
-                $lines.Add("  $hubMid[`"$hubLabel`"]") | Out-Null
-            }
-
-            # VNet -> Private Link edge annotated with PE subnet(s) when we can resolve them.
-            if ([string]::IsNullOrWhiteSpace($subnetLabel)) {
-                $lines.Add("  $vnetMid --> $hubMid") | Out-Null
-            }
-            else {
-                $vToHubLabel = ConvertTo-MermaidSafeLabel $subnetLabel
-                $lines.Add("  $vnetMid -->|$vToHubLabel| $hubMid") | Out-Null
-            }
-
-            foreach ($t in @($plg.privateLinkTargetIds | Sort-Object -Unique)) {
-                if ([string]::IsNullOrWhiteSpace($t)) { continue }
-
-                $tMid = $mIdPlTarget[$t]
-                if (-not $tMid) {
-                    $tMid = Get-MermaidId -Map $mIdPlTarget -Key $t -Prefix 'pl_' -CounterRef ([ref]$plTargetCounter)
-                    $tName = Get-DisplayNameFromId $t
-                    $tType = Get-ResourceTypeFromId $t
-                    $tLabelRaw = [string]::IsNullOrWhiteSpace($tType) ? $tName : ("{0}<br/>{1}" -f $tName, $tType)
-                    $tLabel = ConvertTo-MermaidSafeLabel $tLabelRaw
-                    $lines.Add("  $tMid[`"$tLabel`"]") | Out-Null
-                }
-
-                # Private Link hub -> target edge. Keep dashed to visually distinguish from "in-VNet" links.
-                $edgeLabel = ConvertTo-MermaidSafeLabel 'PrivateLink'
-                $lines.Add("  $hubMid -.->|$edgeLabel| $tMid") | Out-Null
-            }
-        }
-    }
-
-    # Emit VNet peering edges (best-effort)
-    $peeringPairs = @{}
-
-    # 1) Prefer peering info already present in the JSON (after running WARA with the new enrichment)
-    foreach ($r in $inventory) {
-        if ($null -eq $r -or [string]::IsNullOrWhiteSpace([string]$r.id)) { continue }
-        if ([string]$r.type -ine 'microsoft.network/virtualnetworks') { continue }
-        $localVnetId = [string]$r.id
-        $remoteVnetIds = Normalize-IdList (Get-OptionalPropertyValue -Obj $r -Name 'topology_vnetPeeringRemoteVnetIds')
-        foreach ($remote in $remoteVnetIds) {
-            if ([string]::IsNullOrWhiteSpace($remote)) { continue }
-            $a = $localVnetId.ToLowerInvariant()
-            $b = ([string]$remote).ToLowerInvariant()
-            $k = ($a -lt $b) ? ("$a|$b") : ("$b|$a")
-            $peeringPairs[$k] = @($localVnetId, [string]$remote)
-        }
-    }
-
-    # 2) If no peering info found in file, query ARG (same query as enrichment) and connect VNets seen in this diagram
-    if ($peeringPairs.Count -eq 0 -and $subsForLookup.Count -gt 0) {
-        try {
-            if ((Get-Command -Name Search-AzGraph -ErrorAction SilentlyContinue) -and (Get-AzContext -ErrorAction SilentlyContinue)) {
-                $peeringQuery = @"
-resources
-| where type =~ 'microsoft.network/virtualnetworks/virtualnetworkpeerings'
-| extend localVnetId = tostring(extract('(.+)/virtualNetworkPeerings/[^/]+$', 1, id))
-| extend remoteVnetId = tostring(properties.remoteVirtualNetwork.id)
-| project localVnetId, remoteVnetId
-"@
-                $rows = Search-AzGraph -Query $peeringQuery -Subscription $subsForLookup -First 1000 -ErrorAction Stop
-                foreach ($p in @($rows)) {
-                    if ($null -eq $p) { continue }
-                    if ([string]::IsNullOrWhiteSpace([string]$p.localVnetId)) { continue }
-                    if ([string]::IsNullOrWhiteSpace([string]$p.remoteVnetId)) { continue }
-                    $a = ([string]$p.localVnetId).ToLowerInvariant()
-                    $b = ([string]$p.remoteVnetId).ToLowerInvariant()
-                    $k = ($a -lt $b) ? ("$a|$b") : ("$b|$a")
-                    if (-not $peeringPairs.ContainsKey($k)) {
-                        $peeringPairs[$k] = @([string]$p.localVnetId, [string]$p.remoteVnetId)
-                    }
-                }
-            }
-        }
-        catch {
-            # ignore
-        }
-    }
-
-    foreach ($pair in $peeringPairs.Values) {
-        $left = [string]$pair[0]
-        $right = [string]$pair[1]
-
-        $lmid = $mIdVnet[$left]
-        if (-not $lmid) {
-            $lmid = Get-MermaidId -Map $mIdVnet -Key $left -Prefix 'vnet_' -CounterRef ([ref]$vnetCounter)
-            $vnetName = Get-DisplayNameFromId $left
-            $label = ConvertTo-MermaidSafeLabel ("{0}<br/>Virtual Network" -f $vnetName)
-            $lines.Add("  $lmid[`"$label`"]") | Out-Null
-        }
-
-        $rmid = $mIdVnet[$right]
-        if (-not $rmid) {
-            $rmid = Get-MermaidId -Map $mIdVnet -Key $right -Prefix 'vnet_' -CounterRef ([ref]$vnetCounter)
-            $vnetName = Get-DisplayNameFromId $right
-            $label = ConvertTo-MermaidSafeLabel ("{0}<br/>Virtual Network" -f $vnetName)
-            $lines.Add("  $rmid[`"$label`"]") | Out-Null
-        }
-
-        if ($lmid -ne $rmid) {
-            $lines.Add("  $lmid ---|peering| $rmid") | Out-Null
-        }
-    }
-
-    $lines.Add('```') | Out-Null
-    $lines.Add("") | Out-Null
 
     foreach ($gs in $groupSummaries | Sort-Object resourceType, count -Descending) {
         $lines.Add("## $($gs.resourceType)  (x$($gs.count))") | Out-Null
@@ -799,10 +1298,12 @@ resources
 
 # Always print a concise summary to stdout
 [pscustomobject]@{
-    input     = $InputJson
+    input     = $sourceLabel
     groups    = $groups.Count
     nodes     = $nodes.Count
     edges     = $edges.Count
     outJson   = $OutputJson
     outMd     = $OutputMd
 } | Format-List
+
+}

@@ -106,6 +106,109 @@ Describe 'Add-WAFResourceTopology - network path enrichment' {
         $result[0].topology_connectedResourceIds | Should -Match ([regex]::Escape($vmId))
     }
 
+    It 'Should write topology_subnetPrefixPairs for referenced subnets' {
+        $subId = '11111111-1111-1111-1111-111111111111'
+        $rg = 'rg'
+
+        $subnetId = "/subscriptions/$subId/resourceGroups/$rg/providers/Microsoft.Network/virtualNetworks/vnetA/subnets/default"
+        $vnetId = "/subscriptions/$subId/resourceGroups/$rg/providers/Microsoft.Network/virtualNetworks/vnetA"
+        $pipId = "/subscriptions/$subId/resourceGroups/$rg/providers/Microsoft.Network/publicIPAddresses/pip1"
+        $lbId = "/subscriptions/$subId/resourceGroups/$rg/providers/Microsoft.Network/loadBalancers/lb1"
+
+        $inventory = @(
+            [pscustomobject]@{ id = $lbId; type = 'microsoft.network/loadbalancers'; name = 'lb1'; resourceGroup = $rg; subscriptionId = $subId }
+        )
+
+        Mock Invoke-WAFQuery {
+            param(
+                [string[]] $SubscriptionIds,
+                [string] $Query
+            )
+
+            if ($Query -match '(?i)microsoft\.network/virtualnetworks' -and $Query -match '(?i)mv-expand\s+sn') {
+                return @(
+                    [pscustomobject]@{ subnetId = $subnetId; vnetId = $vnetId; subnetPrefix = '10.0.0.0/24' }
+                )
+            }
+
+            if ($Query -match '(?i)microsoft\.network/virtualnetworks/virtualnetworkpeerings') { return @() }
+            if ($Query -match '(?i)microsoft\.network/networkinterfaces') { return @() }
+            if ($Query -match '(?i)microsoft\.network/publicipaddresses') {
+                return @(
+                    [pscustomobject]@{ id = $pipId; ipAddress = '1.2.3.4'; fqdn = 'pip1.example.com' }
+                )
+            }
+            if ($Query -match '(?i)microsoft\.network/loadbalancers') {
+                return @(
+                    [pscustomobject]@{
+                        id = $lbId
+                        frontendSubnetIds = @($subnetId)
+                        frontendPublicIpIds = @($pipId)
+                        frontendPrivateIps = @('10.0.0.5')
+                        backendIpConfigIds = @()
+                    }
+                )
+            }
+
+            return @()
+        } -ModuleName utils
+
+        $result = Add-WAFResourceTopology -ResourceInventory $inventory -SubscriptionIds @($subId)
+
+        $result[0].topology_subnetPrefixPairs | Should -BeExactly ("{0}|{1}" -f $subnetId, '10.0.0.0/24')
+    }
+
+    It 'Should enrich Bastion Host subnet bindings and write subnet prefix pairs' {
+        $subId = '11111111-1111-1111-1111-111111111111'
+        $rg = 'rg'
+
+        $subnetId = "/subscriptions/$subId/resourceGroups/$rg/providers/Microsoft.Network/virtualNetworks/vnetA/subnets/AzureBastionSubnet"
+        $vnetId = "/subscriptions/$subId/resourceGroups/$rg/providers/Microsoft.Network/virtualNetworks/vnetA"
+        $pipId = "/subscriptions/$subId/resourceGroups/$rg/providers/Microsoft.Network/publicIPAddresses/pip-bastion"
+        $bastionId = "/subscriptions/$subId/resourceGroups/$rg/providers/Microsoft.Network/bastionHosts/bastion1"
+
+        $inventory = @(
+            [pscustomobject]@{ id = $bastionId; type = 'microsoft.network/bastionhosts'; name = 'bastion1'; resourceGroup = $rg; subscriptionId = $subId }
+        )
+
+        Mock Invoke-WAFQuery {
+            param(
+                [string[]] $SubscriptionIds,
+                [string] $Query
+            )
+
+            if ($Query -match '(?i)microsoft\.network/virtualnetworks' -and $Query -match '(?i)mv-expand\s+sn') {
+                return @(
+                    [pscustomobject]@{ subnetId = $subnetId; vnetId = $vnetId; subnetPrefix = '10.1.1.0/26' }
+                )
+            }
+
+            if ($Query -match '(?i)microsoft\.network/virtualnetworks/virtualnetworkpeerings') { return @() }
+            if ($Query -match '(?i)microsoft\.network/networkinterfaces') { return @() }
+
+            if ($Query -match '(?i)microsoft\.network/publicipaddresses') {
+                return @(
+                    [pscustomobject]@{ id = $pipId; ipAddress = '1.2.3.4'; fqdn = 'bastion.example.com' }
+                )
+            }
+
+            if ($Query -match '(?i)microsoft\.network/bastionhosts') {
+                return @(
+                    [pscustomobject]@{ id = $bastionId; subnetIds = @($subnetId); publicIpIds = @($pipId); privateIps = @('10.1.1.4') }
+                )
+            }
+
+            return @()
+        } -ModuleName utils
+
+        $result = Add-WAFResourceTopology -ResourceInventory $inventory -SubscriptionIds @($subId)
+
+        $result[0].topology_subnetIds | Should -Match ([regex]::Escape($subnetId))
+        $result[0].topology_vnetIds | Should -Match ([regex]::Escape($vnetId))
+        $result[0].topology_publicIpIds | Should -Match ([regex]::Escape($pipId))
+        $result[0].topology_subnetPrefixPairs | Should -BeExactly ("{0}|{1}" -f $subnetId, '10.1.1.0/26')
+    }
+
     It 'Should enrich ExpressRoute circuit to VNet gateway relationships' {
         $vngId = '/subscriptions/11111111-1111-1111-1111-111111111111/resourceGroups/rg/providers/Microsoft.Network/virtualNetworkGateways/vng1'
         $circuitId = '/subscriptions/11111111-1111-1111-1111-111111111111/resourceGroups/rg/providers/Microsoft.Network/expressRouteCircuits/er1'

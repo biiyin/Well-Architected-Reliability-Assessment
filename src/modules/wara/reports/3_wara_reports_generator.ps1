@@ -39,6 +39,8 @@ Param(
 
     [switch] $includeLow,
 
+    [switch] $Chinese,
+
     [Parameter(Mandatory = $false)]
     [string] $CustomerName = '[Customer Name]',
 
@@ -326,7 +328,13 @@ function Build-PPTSlide12 {
     $TargetShape.Delete()
 
     Write-Debug ((get-date -Format 'yyyy-MM-dd HH:mm:ss') + ' - Editing Slide 12 - Adding Workload name: ' + $WorkloadName)
-    ($SlideWorkloadSummary.Shapes | Where-Object { $_.Id -eq 3 }).TextFrame.TextRange.Text = ('During the engagement, the Workload ' + $WorkloadName + ' has been reviewed. The solution is hosted in two Azure regions, and runs mainly IaaS resources, with some PaaS resources, which includes but is not limited to:')
+    $workloadSummaryText = if ($Chinese.IsPresent) {
+        ('在本次合作期间，已审查工作负载 ' + $WorkloadName + '。该解决方案托管在两个 Azure 区域中，并主要运行 IaaS 资源，同时包含部分 PaaS 资源，其中包括但不限于：')
+    }
+    else {
+        ('During the engagement, the Workload ' + $WorkloadName + ' has been reviewed. The solution is hosted in two Azure regions, and runs mainly IaaS resources, with some PaaS resources, which includes but is not limited to:')
+    }
+    ($SlideWorkloadSummary.Shapes | Where-Object { $_.Id -eq 3 }).TextFrame.TextRange.Text = $workloadSummaryText
 
     $loop = 1
     foreach ($ResourcesType in $ResourcesTypes) {

@@ -80,8 +80,16 @@ If your WARA collector output JSON contains `resourceInventory` entries with `to
 
 ```powershell
 pwsh -NoProfile -File .\tools\Export-WARANetworkTopology.ps1 \
-  -InputJson .\output\WARA-File-<timestamp>.json \
+  -InputPath .\output\WARA-File-<timestamp>.json \
   -OutputJson .\output\WARA-NetworkTopology.json \
+  -OutputMd .\output\WARA-NetworkTopology.md
+```
+
+If you only have the WARA Analyzer Excel output, you can also generate a topology from the `WorkloadInventory` worksheet’s `networkConfig` column:
+
+```powershell
+pwsh -NoProfile -File .\tools\Export-WARANetworkTopology.ps1 \
+  -InputPath .\output\Expert-Analysis-v1-<timestamp>.xlsx \
   -OutputMd .\output\WARA-NetworkTopology.md
 ```
 

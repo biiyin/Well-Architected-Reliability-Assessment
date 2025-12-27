@@ -14,7 +14,7 @@ Well-Architected Reliability Assessment Report Generator Function
 
 ```
 Start-WARAReport [-Help] [-includeLow] [[-CustomerName] <String>] [[-WorkloadName] <String>]
- [-ExpertAnalysisFile] <String> [[-AssessmentFindingsFile] <String>] [[-PPTTemplateFile] <String>]
+ [-ExpertAnalysisFile] <String> [[-AssessmentFindingsFile] <String>] [[-PPTTemplateFile] <String>] [-Chinese]
  [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
@@ -131,6 +131,21 @@ Aliases:
 Required: False
 Position: 5
 Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -Chinese
+Use the Chinese PowerPoint template ("*-Template-zh.pptx") when -PPTTemplateFile is not provided. Some generated slide text is also localized when this switch is set.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: False
 Accept pipeline input: False
 Accept wildcard characters: False
 ```

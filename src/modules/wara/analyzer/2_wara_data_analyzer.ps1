@@ -1042,6 +1042,7 @@ function Convert-TopologyToNetworkConfig {
     $pairs = [ordered]@{
         vnetIds                 = $Resource.topology_vnetIds
         subnetIds               = $Resource.topology_subnetIds
+        subnetPrefixPairs        = $Resource.topology_subnetPrefixPairs
         nicIds                  = $Resource.topology_nicIds
         privateIps              = $Resource.topology_privateIps
         publicIpIds             = $Resource.topology_publicIpIds

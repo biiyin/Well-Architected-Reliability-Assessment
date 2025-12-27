@@ -17,6 +17,9 @@ Name of the workload being assessed.
 .PARAMETER includeLow
 Option to also consider Low Impact recommendations.
 
+.PARAMETER Chinese
+Use the Chinese PowerPoint template ("*-Template-zh.pptx") when -PPTTemplateFile is not provided.
+
 .PARAMETER ExpertAnalysisFile
 Path to the Excel file created by the "2_wara_data_analyzer" script.
 
@@ -35,6 +38,7 @@ function Start-WARAReport {
         [switch] $Help,
         #[switch] $csvExport,
         [switch] $includeLow,
+        [switch] $Chinese,
         [string] $CustomerName,
         [string] $WorkloadName,
         [Parameter(mandatory = $true)]
@@ -60,6 +64,23 @@ function Start-WARAReport {
     }
 
     Write-Host 'Wrapping Report Generator' -ForegroundColor Cyan
-    & "$PSScriptRoot/3_wara_reports_generator.ps1" @PSBoundParameters
+
+    $generatorParams = @{} + $PSBoundParameters
+
+    if ($Chinese.IsPresent -and [string]::IsNullOrWhiteSpace($PPTTemplateFile)) {
+        $generatorParams['PPTTemplateFile'] = (Join-Path -Path $PSScriptRoot -ChildPath 'Mandatory - Executive Summary presentation - Template-zh.pptx')
+    }
+
+    Invoke-WARAReportGenerator -BoundParameters $generatorParams
     Write-Host Report Generator Complete -ForegroundColor Cyan
+}
+
+function Invoke-WARAReportGenerator {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [hashtable] $BoundParameters
+    )
+
+    & "$PSScriptRoot/3_wara_reports_generator.ps1" @BoundParameters
 }

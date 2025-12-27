@@ -15,7 +15,7 @@ It:
 Path to the WARA config file (same format as docs/wara/configfile.example).
 
 .PARAMETER ModuleZip
-Path to the custom WARA module zip (for example: ./dist/WARA-custom-1.0.6.1.zip).
+Path to the custom WARA module zip (for example: ./dist/WARA-custom-1.0.6.2.zip).
 
 .PARAMETER OutputDirectory
 Directory where the JSON and Excel output should be written.
@@ -27,10 +27,10 @@ Azure environment name. Use AzureChinaCloud for China.
 If set, the script will not copy the module into PSModulePath; it will import the module from the expanded zip folder.
 
 .PARAMETER InstallDependencies
-If set, installs missing dependencies Az.Accounts and Az.ResourceGraph.
+If set, installs missing dependencies Az.Accounts, Az.ResourceGraph, and Az.Network.
 
 .EXAMPLE
-pwsh -NoProfile -File .\Invoke-WARAFromConfig.ps1 -ConfigFile .\docs\wara\config.txt -ModuleZip .\dist\WARA-custom-1.0.6.1.zip
+pwsh -NoProfile -File .\Invoke-WARAFromConfig.ps1 -ConfigFile .\docs\wara\config.txt -ModuleZip .\dist\WARA-custom-1.0.6.2.zip
 
 .EXAMPLE
 pwsh -NoProfile -File .\Invoke-WARAFromConfig.ps1 -ConfigFile C:\WARA\config.txt -AzureEnvironment AzureChinaCloud
@@ -42,7 +42,7 @@ param(
     [string] $ConfigFile=".\\configfile",
 
     [Parameter(Mandatory = $false)]
-    [string] $ModuleZip = ".\\dist\\WARA-custom-1.0.6.1.zip",
+    [string] $ModuleZip = ".\\dist\\WARA-custom-1.0.6.2.zip",
 
     [Parameter(Mandatory = $false)]
     [string] $OutputDirectory = ".\\output",
@@ -190,6 +190,8 @@ catch {
 
 Confirm-ModuleDependency -Name 'Az.Accounts' -MinimumVersion '3.0.0'
 Confirm-ModuleDependency -Name 'Az.ResourceGraph' -MinimumVersion '1.0.0'
+# Used by topology enrichment fallback paths (e.g., Get-AzVirtualNetworkPeering).
+Confirm-ModuleDependency -Name 'Az.Network' -MinimumVersion '7.0.0'
 
 Write-Section "Expand custom module zip"
 $stagingRoot = Join-Path -Path $env:TEMP -ChildPath ("WARA-custom-" + [guid]::NewGuid().ToString('n'))

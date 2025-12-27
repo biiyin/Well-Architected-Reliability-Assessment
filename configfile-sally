@@ -1,0 +1,12 @@
+[tenantId]
+4166fba4-c65c-4f28-a558-e668f0799f9a
+
+[subscriptionIds]
+e85be61c-5c45-431c-a837-18c8130062e1
+
+[resourcegroups]
+/subscriptions/e85be61c-5c45-431c-a837-18c8130062e1/resourceGroups/demo
+/subscriptions/e85be61c-5c45-431c-a837-18c8130062e1/resourceGroups/AzureLocalDemo
+/subscriptions/e85be61c-5c45-431c-a837-18c8130062e1/resourceGroups/MCDDemo
+
+[tags]

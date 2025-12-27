@@ -101,6 +101,7 @@ function Add-WAFResourceTopology {
     $topologyPropertyNames = @(
         'topology_nicIds',
         'topology_subnetIds',
+        'topology_subnetPrefixPairs',
         'topology_vnetIds',
         'topology_privateIps',
         'topology_publicIpIds',
@@ -151,6 +152,35 @@ function Add-WAFResourceTopology {
         return ($list -join ';')
     }
 
+    function Split-StringList {
+        param([object] $Value)
+
+        if ($null -eq $Value) { return @() }
+
+        if ($Value -is [string]) {
+            $s = [string]$Value
+            if ([string]::IsNullOrWhiteSpace($s)) { return @() }
+            $parts = $s.Split(';') | ForEach-Object { $_.Trim() } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) -and $_ -ne 'null' }
+            return @($parts | Sort-Object -Unique)
+        }
+
+        if ($Value -is [System.Collections.IEnumerable]) {
+            $items = @()
+            foreach ($v in $Value) {
+                if ($null -eq $v) { continue }
+                $sv = [string]$v
+                if ([string]::IsNullOrWhiteSpace($sv)) { continue }
+                if ($sv -eq 'null') { continue }
+                $items += $sv.Trim()
+            }
+            return @($items | Sort-Object -Unique)
+        }
+
+        $s2 = [string]$Value
+        if ([string]::IsNullOrWhiteSpace($s2)) { return @() }
+        return @($s2.Trim())
+    }
+
     $invById = @{}
     foreach ($r in $ResourceInventory) {
         if ($null -eq $r -or [string]::IsNullOrWhiteSpace([string]$r.id)) { continue }
@@ -167,7 +197,7 @@ function Add-WAFResourceTopology {
     }
 
     try {
-        Write-Verbose 'Querying Azure Resource Graph for topology enrichment (VNet/Subnet/NIC/PrivateEndpoint/PublicIP/AppService/LB/AppGW/Firewall/ER)..'
+        Write-Verbose 'Querying Azure Resource Graph for topology enrichment (VNet/Subnet/NIC/PrivateEndpoint/PublicIP/AppService/LB/Bastion/AppGW/Firewall/ER)..'
 
         function Invoke-WAFQueryOrEmpty {
             param(
@@ -252,17 +282,22 @@ resources
 | mv-expand sn = properties.subnets
 | extend subnetId = tostring(sn.id)
 | extend subnetName = tostring(sn.name)
-| extend subnetPrefix = tostring(sn.properties.addressPrefix)
+| extend subnetPrefix = tostring(coalesce(sn.properties.addressPrefix, sn.properties.addressPrefixes[0]))
 | extend nsgId = tostring(sn.properties.networkSecurityGroup.id)
 | extend routeTableId = tostring(sn.properties.routeTable.id)
 | project vnetId = id, vnetName = name, subscriptionId, resourceGroup, location, subnetId, subnetName, subnetPrefix, nsgId, routeTableId
 "@
         $subnets = Invoke-WAFQueryOrEmpty -Query $subnetQuery -FeatureName 'subnets'
         $subnetToVnet = @{}
+        $subnetToPrefix = @{}
         foreach ($s in @($subnets)) {
             if ($null -eq $s) { continue }
             if ([string]::IsNullOrWhiteSpace([string]$s.subnetId)) { continue }
-            $subnetToVnet[([string]$s.subnetId).ToLowerInvariant()] = [string]$s.vnetId
+            $sidLower = ([string]$s.subnetId).ToLowerInvariant()
+            $subnetToVnet[$sidLower] = [string]$s.vnetId
+            if (-not [string]::IsNullOrWhiteSpace([string]$s.subnetPrefix)) {
+                $subnetToPrefix[$sidLower] = [string]$s.subnetPrefix
+            }
         }
 
         # VNet Peerings: map local VNet -> remote VNet(s)
@@ -463,6 +498,78 @@ resources
         foreach ($lb in @($lbs)) {
             if ($null -eq $lb -or [string]::IsNullOrWhiteSpace([string]$lb.id)) { continue }
             $lbById[([string]$lb.id).ToLowerInvariant()] = $lb
+        }
+
+        # Bastion Hosts: subnet + publicIP/privateIP
+        $bastionQuery = @"
+resources
+| where type =~ 'microsoft.network/bastionhosts'
+| mv-expand ipconf = properties.ipConfigurations to typeof(dynamic)
+| extend subnetId = tostring(ipconf.properties.subnet.id)
+| extend publicIpId = tostring(ipconf.properties.publicIPAddress.id)
+| extend privateIp = tostring(ipconf.properties.privateIPAddress)
+| summarize subnetIds = make_set(subnetId), publicIpIds = make_set(publicIpId), privateIps = make_set(privateIp) by id, name, subscriptionId, resourceGroup, location
+"@
+        $bastions = Invoke-WAFQueryOrEmpty -Query $bastionQuery -FeatureName 'bastionHosts'
+
+        if (@($bastions).Count -eq 0 -and (Test-WAFCanUseAzNetworkFallback)) {
+            $getBastionCmd = Get-Command -Name Get-AzBastion -ErrorAction SilentlyContinue
+            if ($null -ne $getBastionCmd) {
+                $bastionItems = Get-InventoryItemsByType -ResourceType 'microsoft.network/bastionhosts'
+                if ($bastionItems.Count -gt 0) {
+                    Write-Verbose 'No Bastion Hosts returned by ARG; falling back to Get-AzBastion (scoped to inventory).'
+                    $bastionFallbackById = @{}
+                    foreach ($item in $bastionItems) {
+                        $subId = [string]$item.subscriptionId
+                        if (-not (Ensure-WAFSubscriptionContext -SubscriptionId $subId)) { continue }
+
+                        $rg = [string]$item.resourceGroup
+                        $name = [string]$item.name
+                        try {
+                            $b0 = Get-AzBastion -ResourceGroupName $rg -Name $name -ErrorAction Stop
+                        }
+                        catch {
+                            Write-Verbose ("Topology enrichment: Get-AzBastion failed for {0}/{1}. Error: {2}" -f $rg, $name, $_.Exception.Message)
+                            continue
+                        }
+
+                        if ($null -eq $b0 -or [string]::IsNullOrWhiteSpace([string]$b0.Id)) { continue }
+                        $idLower = ([string]$b0.Id).ToLowerInvariant()
+                        if ($bastionFallbackById.ContainsKey($idLower)) { continue }
+
+                        $subnetIds = @()
+                        $pipIds = @()
+                        $privateIps = @()
+                        foreach ($ip0 in @($b0.IpConfigurations)) {
+                            if ($null -eq $ip0) { continue }
+                            if ($ip0.Subnet -and $ip0.Subnet.Id) { $subnetIds += [string]$ip0.Subnet.Id }
+                            if ($ip0.PublicIpAddress -and $ip0.PublicIpAddress.Id) { $pipIds += [string]$ip0.PublicIpAddress.Id }
+                            if (-not [string]::IsNullOrWhiteSpace([string]$ip0.PrivateIpAddress)) { $privateIps += [string]$ip0.PrivateIpAddress }
+                        }
+
+                        $bastionFallbackById[$idLower] = [pscustomobject]@{
+                            id = [string]$b0.Id
+                            name = [string]$b0.Name
+                            subscriptionId = $subId
+                            resourceGroup = $rg
+                            location = [string]$b0.Location
+                            subnetIds = New-TopologySetFromValues -Values $subnetIds
+                            publicIpIds = New-TopologySetFromValues -Values $pipIds
+                            privateIps = New-TopologySetFromValues -Values $privateIps
+                        }
+                    }
+                    $bastions = @($bastionFallbackById.Values)
+                }
+            }
+            else {
+                Write-Verbose 'No Bastion Hosts returned by ARG and Get-AzBastion is unavailable; skipping Bastion fallback.'
+            }
+        }
+
+        $bastionById = @{}
+        foreach ($bh in @($bastions)) {
+            if ($null -eq $bh -or [string]::IsNullOrWhiteSpace([string]$bh.id)) { continue }
+            $bastionById[([string]$bh.id).ToLowerInvariant()] = $bh
         }
 
         # Application Gateways: gateway subnet + frontends (publicIP/privateIP) + backends (NIC ipConfig IDs)
@@ -940,6 +1047,49 @@ resources
             }
         }
 
+        # PostgreSQL Flexible Server: publicNetworkAccess
+        # Field lives under properties.network.publicNetworkAccess (validated via ARG).
+        $pgFlexQuery = @"
+resources
+| where type =~ 'microsoft.dbforpostgresql/flexibleservers'
+| extend publicNetworkAccess = tostring(coalesce(properties.network.publicNetworkAccess, properties.publicNetworkAccess))
+| project id, publicNetworkAccess
+"@
+        $pgFlexServers = Invoke-WAFQueryOrEmpty -Query $pgFlexQuery -FeatureName 'postgresFlexibleServers'
+        $pgFlexById = @{}
+        foreach ($p in @($pgFlexServers)) {
+            if ($null -eq $p -or [string]::IsNullOrWhiteSpace([string]$p.id)) { continue }
+            $pgFlexById[([string]$p.id).ToLowerInvariant()] = $p
+        }
+
+        # Azure SQL Servers: publicNetworkAccess
+        $sqlServerQuery = @"
+resources
+| where type =~ 'microsoft.sql/servers'
+| extend publicNetworkAccess = tostring(properties.publicNetworkAccess)
+| project id, publicNetworkAccess
+"@
+        $sqlServers = Invoke-WAFQueryOrEmpty -Query $sqlServerQuery -FeatureName 'sqlServers'
+        $sqlServerById = @{}
+        foreach ($s in @($sqlServers)) {
+            if ($null -eq $s -or [string]::IsNullOrWhiteSpace([string]$s.id)) { continue }
+            $sqlServerById[([string]$s.id).ToLowerInvariant()] = $s
+        }
+
+        # Storage Accounts: publicNetworkAccess
+        $storageQuery = @"
+resources
+| where type =~ 'microsoft.storage/storageaccounts'
+| extend publicNetworkAccess = tostring(properties.publicNetworkAccess)
+| project id, publicNetworkAccess
+"@
+        $storageAccounts = Invoke-WAFQueryOrEmpty -Query $storageQuery -FeatureName 'storageAccounts'
+        $storageById = @{}
+        foreach ($s in @($storageAccounts)) {
+            if ($null -eq $s -or [string]::IsNullOrWhiteSpace([string]$s.id)) { continue }
+            $storageById[([string]$s.id).ToLowerInvariant()] = $s
+        }
+
         # App Services: VNet integration subnet + publicNetworkAccess
         $appQuery = @"
 resources
@@ -973,16 +1123,40 @@ resources
                 }
             }
 
+            # If resource is a PostgreSQL Flexible Server
+            if ($rtype -ieq 'microsoft.dbforpostgresql/flexibleservers' -and $pgFlexById.ContainsKey($rid)) {
+                $p = $pgFlexById[$rid]
+                if ([string]::IsNullOrWhiteSpace([string]$r.topology_publicNetworkAccess)) {
+                    $r.topology_publicNetworkAccess = if ([string]::IsNullOrWhiteSpace([string]$p.publicNetworkAccess)) { $null } else { [string]$p.publicNetworkAccess }
+                }
+            }
+
+            # If resource is an Azure SQL Server
+            if ($rtype -ieq 'microsoft.sql/servers' -and $sqlServerById.ContainsKey($rid)) {
+                $s = $sqlServerById[$rid]
+                if ([string]::IsNullOrWhiteSpace([string]$r.topology_publicNetworkAccess)) {
+                    $r.topology_publicNetworkAccess = if ([string]::IsNullOrWhiteSpace([string]$s.publicNetworkAccess)) { $null } else { [string]$s.publicNetworkAccess }
+                }
+            }
+
+            # If resource is a Storage Account
+            if ($rtype -ieq 'microsoft.storage/storageaccounts' -and $storageById.ContainsKey($rid)) {
+                $s = $storageById[$rid]
+                if ([string]::IsNullOrWhiteSpace([string]$r.topology_publicNetworkAccess)) {
+                    $r.topology_publicNetworkAccess = if ([string]::IsNullOrWhiteSpace([string]$s.publicNetworkAccess)) { $null } else { [string]$s.publicNetworkAccess }
+                }
+            }
+
             # If resource is a NIC
             if ($rtype -ieq 'microsoft.network/networkinterfaces' -and $nicById.ContainsKey($rid)) {
                 $n = $nicById[$rid]
                 $subnetIds = Normalize-StringList -Value $n.subnetIds
-                $publicIpIds = Normalize-StringList -Value $n.publicIpIds
+                $publicIpResourceIds = Normalize-StringList -Value $n.publicIpIds
                 $privateIps = Normalize-StringList -Value $n.privateIps
 
                 $r.topology_subnetIds = Join-StringList -Value $subnetIds
                 $r.topology_privateIps = Join-StringList -Value $privateIps
-                $r.topology_publicIpIds = Join-StringList -Value $publicIpIds
+                $r.topology_publicIpIds = Join-StringList -Value $publicIpResourceIds
 
                 $vnetIds = @()
                 foreach ($sid in $subnetIds) {
@@ -993,8 +1167,10 @@ resources
 
                 $pipAddresses = @()
                 $pipFqdns = @()
-                foreach ($pid in $publicIpIds) {
-                    $p = $pipById[$pid.ToLowerInvariant()]
+                $publicIpResourceIds | ForEach-Object {
+                    $publicIpResourceId0 = [string]$_
+                    if ([string]::IsNullOrWhiteSpace($publicIpResourceId0)) { return }
+                    $p = $pipById[$publicIpResourceId0.ToLowerInvariant()]
                     if ($null -ne $p) {
                         if (-not [string]::IsNullOrWhiteSpace([string]$p.ipAddress)) { $pipAddresses += [string]$p.ipAddress }
                         if (-not [string]::IsNullOrWhiteSpace([string]$p.fqdn)) { $pipFqdns += [string]$p.fqdn }
@@ -1014,19 +1190,19 @@ resources
                 $r.topology_nicIds = Join-StringList -Value $nicIds
 
                 $subnetIds = @()
-                $publicIpIds = @()
+                $publicIpResourceIds = @()
                 $privateIps = @()
                 foreach ($nid in $nicIds) {
                     $n = $nicById[$nid.ToLowerInvariant()]
                     if ($null -eq $n) { continue }
                     $subnetIds += Normalize-StringList -Value $n.subnetIds
-                    $publicIpIds += Normalize-StringList -Value $n.publicIpIds
+                    $publicIpResourceIds += Normalize-StringList -Value $n.publicIpIds
                     $privateIps += Normalize-StringList -Value $n.privateIps
                 }
 
                 $r.topology_subnetIds = Join-StringList -Value $subnetIds
                 $r.topology_privateIps = Join-StringList -Value $privateIps
-                $r.topology_publicIpIds = Join-StringList -Value $publicIpIds
+                $r.topology_publicIpIds = Join-StringList -Value $publicIpResourceIds
 
                 $vnetIds = @()
                 foreach ($sid in (Normalize-StringList -Value $subnetIds)) {
@@ -1037,8 +1213,10 @@ resources
 
                 $pipAddresses = @()
                 $pipFqdns = @()
-                foreach ($pid in (Normalize-StringList -Value $publicIpIds)) {
-                    $p = $pipById[$pid.ToLowerInvariant()]
+                (Normalize-StringList -Value $publicIpResourceIds) | ForEach-Object {
+                    $publicIpResourceId0 = [string]$_
+                    if ([string]::IsNullOrWhiteSpace($publicIpResourceId0)) { return }
+                    $p = $pipById[$publicIpResourceId0.ToLowerInvariant()]
                     if ($null -ne $p) {
                         if (-not [string]::IsNullOrWhiteSpace([string]$p.ipAddress)) { $pipAddresses += [string]$p.ipAddress }
                         if (-not [string]::IsNullOrWhiteSpace([string]$p.fqdn)) { $pipFqdns += [string]$p.fqdn }
@@ -1130,6 +1308,12 @@ resources
                 }
             }
 
+            # If resource is a Bastion Host
+            if ($rtype -ieq 'microsoft.network/bastionhosts' -and $bastionById.ContainsKey($rid)) {
+                $bh = $bastionById[$rid]
+                Set-NetworkFromSubnetsAndPips -Resource $r -SubnetIds $bh.subnetIds -PublicIpIds $bh.publicIpIds -PrivateIps $bh.privateIps
+            }
+
             # If resource is an Application Gateway
             if ($rtype -ieq 'microsoft.network/applicationgateways' -and $appGwById.ContainsKey($rid)) {
                 $ag = $appGwById[$rid]
@@ -1205,14 +1389,16 @@ resources
 
             # If resource is a Private Link target (reverse mapping)
             if ($targetToPeIds.ContainsKey($rid)) {
-                $peIds = Normalize-StringList -Value $targetToPeIds[$rid]
-                $r.topology_privateEndpointIds = Join-StringList -Value $peIds
+                $privateEndpointIdsList = Normalize-StringList -Value $targetToPeIds[$rid]
+                $r.topology_privateEndpointIds = Join-StringList -Value $privateEndpointIdsList
 
                 $peSubnetIds = @()
                 $peVnetIds = @()
-                foreach ($pid in $peIds) {
-                    $pe = $peById[$pid.ToLowerInvariant()]
-                    if ($null -eq $pe) { continue }
+                $privateEndpointIdsList | ForEach-Object {
+                    $peId0 = [string]$_
+                    if ([string]::IsNullOrWhiteSpace($peId0)) { return }
+                    $pe = $peById[$peId0.ToLowerInvariant()]
+                    if ($null -eq $pe) { return }
                     $peSubnetIds += Normalize-StringList -Value $pe.subnetIds
                 }
                 foreach ($sid in (Normalize-StringList -Value $peSubnetIds)) {
@@ -1232,6 +1418,33 @@ resources
                     $r.topology_vnetPeeringDetails = Join-StringList -Value $vnetToPeeringDetails[$rid]
                 }
             }
+        }
+
+        # Subnet prefix pairs (offline-friendly): write subnetId|prefix pairs into a single ';' delimited string.
+        # This allows later exporters (JSON/Excel) to render subnet prefix labels without querying Azure.
+        foreach ($r in $ResourceInventory) {
+            if ($null -eq $r) { continue }
+
+            $subnetIdsForResource = @(
+                (Split-StringList -Value $r.topology_subnetIds) +
+                (Split-StringList -Value $r.topology_privateEndpointSubnetIds)
+            ) | Sort-Object -Unique
+
+            if ($subnetIdsForResource.Count -eq 0) {
+                $r.topology_subnetPrefixPairs = $null
+                continue
+            }
+
+            $pairs = @()
+            foreach ($sid in $subnetIdsForResource) {
+                if ([string]::IsNullOrWhiteSpace([string]$sid)) { continue }
+                $prefix = $subnetToPrefix[([string]$sid).ToLowerInvariant()]
+                if (-not [string]::IsNullOrWhiteSpace([string]$prefix)) {
+                    $pairs += ("{0}|{1}" -f [string]$sid, [string]$prefix)
+                }
+            }
+
+            $r.topology_subnetPrefixPairs = Join-StringList -Value $pairs
         }
     }
     catch {
