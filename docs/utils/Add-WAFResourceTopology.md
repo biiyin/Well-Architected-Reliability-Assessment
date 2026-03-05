@@ -29,6 +29,17 @@ This enrichment is used by downstream steps such as network topology generation 
   - Azure SQL Server (`microsoft.sql/servers`) via `properties.publicNetworkAccess`.
   - Storage Account (`microsoft.storage/storageaccounts`) via `properties.publicNetworkAccess`.
 
+- App Service SKU backfill:
+  - For App Services (`microsoft.web/sites`), if `sku` is empty in the inventory projection, the function attempts to derive it from the associated App Service Plan (`microsoft.web/serverfarms`) using `properties.serverFarmId`.
+
+- VNet integration (delegated subnet) enrichment:
+  - PostgreSQL Flexible Server (`microsoft.dbforpostgresql/flexibleservers`) via `properties.network.delegatedSubnetResourceId`.
+  - MySQL Flexible Server (`microsoft.dbformysql/flexibleservers`) via `properties.network.delegatedSubnetResourceId`.
+
+- Offline-friendly subnet metadata:
+  - `topology_subnetPrefixPairs`: `subnetId|cidr` pairs.
+  - `topology_subnetDetails`: `subnetId|subnetName|cidr|delegations` records (VNet resources only).
+
 ## PARAMETERS
 
 ### -ResourceInventory

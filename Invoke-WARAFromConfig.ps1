@@ -55,11 +55,34 @@ param(
     [switch] $SkipInstall,
 
     [Parameter(Mandatory = $false)]
-    [Nullable[bool]] $InstallDependencies = $null
+    [Nullable[bool]] $InstallDependencies = $null,
+
+    # Enables verbose/debug output + a transcript log in OutputDirectory.
+    [Parameter(Mandatory = $false)]
+    [switch] $Diagnostics
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+
+if ($Diagnostics) {
+    # Diagnostics should be non-interactive and noisy.
+    # IMPORTANT: do NOT set global preference variables here (they leak into the user's session).
+    # Setting these in script scope is enough, and we explicitly pass -Verbose/-Debug to the main cmdlets.
+    $VerbosePreference = 'Continue'
+    $DebugPreference = 'Continue'
+    $InformationPreference = 'Continue'
+    $ConfirmPreference = 'None'
+
+    # Avoid mutating the caller's PSDefaultParameterValues hashtable.
+    $PSDefaultParameterValues = @{} + $PSDefaultParameterValues
+    $PSDefaultParameterValues['*:Verbose'] = $true
+    $PSDefaultParameterValues['*:Debug'] = $true
+    $PSDefaultParameterValues['*:Confirm'] = $false
+
+    # Allow module functions (e.g., Invoke-WAFQuery) to dump effective ARG KQL to a file.
+    $env:WARA_DIAGNOSTICS_QUERY_DUMP_DIR = $OutputDirectory
+}
 
 # Default to installing dependencies unless explicitly disabled.
 if ($null -eq $InstallDependencies) {
@@ -68,6 +91,57 @@ if ($null -eq $InstallDependencies) {
 
 function Write-Section([string] $Message) {
     Write-Host "\n=== $Message ===" -ForegroundColor Cyan
+}
+
+function Expand-WARAZipNoPrompt {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][string] $ZipPath,
+        [Parameter(Mandatory = $true)][string] $DestinationPath
+    )
+
+    if (-not (Test-Path -LiteralPath $DestinationPath -PathType Container)) {
+        New-Item -ItemType Directory -Force -Path $DestinationPath | Out-Null
+    }
+
+    try {
+        # .NET 6+ overload supports overwrite.
+        Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue
+        [System.IO.Compression.ZipFile]::ExtractToDirectory($ZipPath, $DestinationPath, $true)
+        return
+    }
+    catch {
+        # Fallback for runtimes that don't support the overwrite overload.
+        Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue
+        $zip = [System.IO.Compression.ZipFile]::OpenRead($ZipPath)
+        try {
+            foreach ($entry in $zip.Entries) {
+                if ([string]::IsNullOrWhiteSpace($entry.FullName)) { continue }
+                $target = Join-Path -Path $DestinationPath -ChildPath $entry.FullName
+
+                # Directory entry
+                if ($entry.FullName.EndsWith('/')) {
+                    if (-not (Test-Path -LiteralPath $target -PathType Container)) {
+                        New-Item -ItemType Directory -Force -Path $target | Out-Null
+                    }
+                    continue
+                }
+
+                $parent = Split-Path -Path $target -Parent
+                if (-not (Test-Path -LiteralPath $parent -PathType Container)) {
+                    New-Item -ItemType Directory -Force -Path $parent | Out-Null
+                }
+
+                if (Test-Path -LiteralPath $target -PathType Leaf) {
+                    Remove-Item -LiteralPath $target -Force -ErrorAction SilentlyContinue
+                }
+                [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $target, $false)
+            }
+        }
+        finally {
+            $zip.Dispose()
+        }
+    }
 }
 
 function Confirm-ModuleDependency([string] $Name, [string] $MinimumVersion) {
@@ -195,9 +269,14 @@ Confirm-ModuleDependency -Name 'Az.Network' -MinimumVersion '7.0.0'
 
 Write-Section "Expand custom module zip"
 $stagingRoot = Join-Path -Path $env:TEMP -ChildPath ("WARA-custom-" + [guid]::NewGuid().ToString('n'))
-New-Item -ItemType Directory -Force -Path $stagingRoot | Out-Null
+ 
+$confirmSplat = @{ Confirm = $false }
 
-Expand-Archive -Path $ModuleZip -DestinationPath $stagingRoot -Force
+New-Item -ItemType Directory -Force -Path $stagingRoot @confirmSplat | Out-Null
+
+# Expand-Archive can prompt per-entry depending on host/session settings.
+# Use non-interactive .NET extraction instead.
+Expand-WARAZipNoPrompt -ZipPath $ModuleZip -DestinationPath $stagingRoot
 
 $manifest = Get-ChildItem -Path $stagingRoot -Recurse -File -Filter 'wara.psd1' | Select-Object -First 1
 if (-not $manifest) {
@@ -225,11 +304,11 @@ if (-not $SkipInstall) {
 
     if (Test-Path $dest) {
         Write-Host "Removing existing module folder: $dest" -ForegroundColor Yellow
-        Remove-Item -Recurse -Force -Path $dest
+        Remove-Item -Recurse -Force -Path $dest @confirmSplat
     }
 
-    New-Item -ItemType Directory -Force -Path $dest | Out-Null
-    Copy-Item -Recurse -Force -Path (Join-Path $moduleFolder '*') -Destination $dest
+    New-Item -ItemType Directory -Force -Path $dest @confirmSplat | Out-Null
+    Copy-Item -Recurse -Force -Path (Join-Path $moduleFolder '*') -Destination $dest @confirmSplat
 
     $importManifestPath = Join-Path -Path $dest -ChildPath 'wara.psd1'
     Write-Host "Installed custom module to: $dest" -ForegroundColor Green
@@ -281,10 +360,33 @@ Write-Section "Run Collector (from config file)"
 New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
 $OutputDirectory = (Resolve-Path -Path $OutputDirectory).Path
 
+$transcriptPath = $null
+if ($Diagnostics) {
+    $timestamp = Get-Date -Format 'yyyy-MM-dd-HH-mm-ss'
+    $transcriptPath = Join-Path -Path $OutputDirectory -ChildPath ("WARA-Diagnostics-$timestamp.log")
+    try {
+        Start-Transcript -Path $transcriptPath -Force | Out-Null
+        Write-Host "Diagnostics enabled. Transcript: $transcriptPath" -ForegroundColor DarkGray
+    }
+    catch {
+        Write-Warning "Failed to start transcript at '$transcriptPath': $($_.Exception.Message)"
+        $transcriptPath = $null
+    }
+}
+
 Push-Location $OutputDirectory
 try {
     # Use -PassThru so we can control the output JSON path
-    $collectorOutput = Start-WARACollector -ConfigFile $ConfigFile -AzureEnvironment $AzureEnvironment -PassThru
+    $collectorParams = @{
+        ConfigFile        = $ConfigFile
+        AzureEnvironment  = $AzureEnvironment
+        PassThru          = $true
+    }
+    if ($Diagnostics) {
+        $collectorParams.Verbose = $true
+        $collectorParams.Debug = $true
+    }
+    $collectorOutput = Start-WARACollector @collectorParams
 
     $timestamp = Get-Date -Format 'yyyy-MM-dd-HH-mm'
     $jsonPath = Join-Path -Path $OutputDirectory -ChildPath ("WARA-File-$timestamp.json")
@@ -293,7 +395,14 @@ try {
     Write-Host "Collector JSON saved: $jsonPath" -ForegroundColor Green
 
     Write-Section "Run Analyzer"
-    $expertAnalysisPath = Start-WARAAnalyzer -JSONFile $jsonPath
+    $analyzerParams = @{
+        JSONFile = $jsonPath
+    }
+    if ($Diagnostics) {
+        $analyzerParams.Verbose = $true
+        $analyzerParams.Debug = $true
+    }
+    $expertAnalysisPath = Start-WARAAnalyzer @analyzerParams
 
     if ($expertAnalysisPath) {
         Write-Host "Analyzer Excel saved: $expertAnalysisPath" -ForegroundColor Green
@@ -304,6 +413,15 @@ try {
 }
 finally {
     Pop-Location
+
+    if ($Diagnostics -and $transcriptPath) {
+        try {
+            Stop-Transcript | Out-Null
+        }
+        catch {
+            # Ignore transcript stop failures
+        }
+    }
 }
 
 Write-Section "Done"

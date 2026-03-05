@@ -32,18 +32,17 @@ Optional path to write the graph model JSON.
 .PARAMETER OutputMd
 Optional path to write a human-readable Markdown summary.
 
-.PARAMETER MermaidByResourceGroup
-When set (default), emit one Mermaid diagram per Resource Group in the Markdown output.
+.PARAMETER MergeMermaidDiagrams
+When set, emit a single high-level Mermaid diagram for the whole inventory.
 
-To disable and generate a single high-level Mermaid diagram for the whole inventory, pass
-`-MermaidByResourceGroup:$false`.
+When not set (default), emit one Mermaid diagram per Resource Group in the Markdown output.
 
 
 .EXAMPLE
 pwsh -NoProfile -File .\tools\Export-WARANetworkTopology.ps1 -InputPath .\output\WARA-File-2025-12-24-20-49.json -OutputJson .\output\WARA-NetworkTopology.json -OutputMd .\output\WARA-NetworkTopology.md
 
 .EXAMPLE
-pwsh -NoProfile -File .\tools\Export-WARANetworkTopology.ps1 -InputPath .\output\WARA-File-2025-12-24-20-49.json -OutputMd .\output\WARA-NetworkTopology.md -MermaidByResourceGroup:$false
+pwsh -NoProfile -File .\tools\Export-WARANetworkTopology.ps1 -InputPath .\output\WARA-File-2025-12-24-20-49.json -OutputMd .\output\WARA-NetworkTopology.md -MergeMermaidDiagrams
 
 .EXAMPLE
 pwsh -NoProfile -File .\tools\Export-WARANetworkTopology.ps1 -InputPath .\output\Expert-Analysis-v1-2025-12-26-00-09.xlsx -OutputMd .\output\WARA-NetworkTopology.md
@@ -68,10 +67,16 @@ param(
 
     ,
     [Parameter(Mandatory = $false)]
-    [switch]$MermaidByResourceGroup = $true
+    [ValidateRange(0, 1000)]
+    [int]$PeeringAggregationThreshold = 3
+
+    ,
+    [Parameter(Mandatory = $false)]
+    [switch]$MergeMermaidDiagrams
 )
 
 Set-StrictMode -Version Latest
+$emitMermaidByResourceGroup = -not $MergeMermaidDiagrams.IsPresent
 
 function Get-CaseInsensitivePropertyValue {
     param(
@@ -552,8 +557,27 @@ function Get-HighLevelMermaidDiagramLines {
         [Parameter(Mandatory = $true)][object[]]$InventorySubset,
         [Parameter(Mandatory = $true)][object[]]$GroupSummaries,
         [Parameter(Mandatory = $true)][hashtable]$ResourceIdToGroupNodeId,
-        [Parameter(Mandatory = $true)][string]$DiagramTitle
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$DiagramTitle,
+
+        [Parameter(Mandatory = $false)]
+        [ValidateRange(0, 1000)]
+        [int]$PeeringAggregationThreshold = 3
     )
+
+    # Defensive: some callers accidentally pass a single List wrapped in an array
+    # (e.g. -GroupSummaries (, $list)). Unwrap it so downstream filters see the
+    # actual objects.
+    if ($InventorySubset.Count -eq 1 -and $null -ne $InventorySubset[0] -and ($InventorySubset[0] -is [System.Collections.IEnumerable]) -and ($InventorySubset[0] -isnot [string])) {
+        $tmpInv = New-Object System.Collections.Generic.List[object]
+        foreach ($x in $InventorySubset[0]) { $tmpInv.Add($x) | Out-Null }
+        $InventorySubset = $tmpInv.ToArray()
+    }
+
+    if ($GroupSummaries.Count -eq 1 -and $null -ne $GroupSummaries[0] -and ($GroupSummaries[0] -is [System.Collections.IEnumerable]) -and ($GroupSummaries[0] -isnot [string])) {
+        $tmpGs = New-Object System.Collections.Generic.List[object]
+        foreach ($x in $GroupSummaries[0]) { $tmpGs.Add($x) | Out-Null }
+        $GroupSummaries = $tmpGs.ToArray()
+    }
 
     $Lines = New-Object System.Collections.Generic.List[string]
 
@@ -579,7 +603,12 @@ function Get-HighLevelMermaidDiagramLines {
     }
 
     $networkResourceTypeAllowlist = @(
-        'microsoft.network/bastionhosts'
+        'microsoft.network/bastionhosts',
+        'microsoft.network/loadbalancers',
+        'microsoft.network/applicationgateways',
+        'microsoft.network/virtualnetworkgateways',
+        'microsoft.network/natgateways',
+        'microsoft.network/azurefirewalls'
     )
 
     $groupsWithVnet = @(
@@ -622,10 +651,13 @@ function Get-HighLevelMermaidDiagramLines {
     $mIdVnet = @{}
     $mIdGroup = @{}
     $mIdPrivateLinkHub = @{}
+    $mIdVnetPeeringGroup = @{}
     $vnetCounter = 0
     $grpCounter = 0
     $plHubCounter = 0
+    $vnetPeeringGroupCounter = 0
     $emittedGroupNodes = @{}
+    $emittedVnetPeeringGroupNodes = @{}
 
     function Get-MermaidId {
         param(
@@ -834,44 +866,198 @@ function Get-HighLevelMermaidDiagramLines {
     }
 
     # VNet peering edges (best-effort, within subset inventory)
-    $peeringPairs = @{}
-    foreach ($r in $InventorySubset) {
-        if ($null -eq $r -or [string]::IsNullOrWhiteSpace([string]$r.id)) { continue }
-        if ([string]$r.type -ine 'microsoft.network/virtualnetworks') { continue }
-        $localVnetId = [string]$r.id
-        $remoteVnetIds = Normalize-IdList (Get-OptionalPropertyValue -Obj $r -Name 'topology_vnetPeeringRemoteVnetIds')
-        foreach ($remote in $remoteVnetIds) {
-            if ([string]::IsNullOrWhiteSpace($remote)) { continue }
-            $a = $localVnetId.ToLowerInvariant()
-            $b = ([string]$remote).ToLowerInvariant()
-            $k = ($a -lt $b) ? ("$a|$b") : ("$b|$a")
-            $peeringPairs[$k] = @($localVnetId, [string]$remote)
+    # Rule: If there are N VNets (N >= threshold) that ONLY have peering connections,
+    # and their peering neighbor set is identical, group them into one aggregated node.
+
+    function Get-VnetIdLower {
+        param([Parameter(Mandatory = $true)][string]$VnetId)
+        return $VnetId.ToLowerInvariant()
+    }
+
+    function Get-VnetIdsWithNonPeeringConnectivityLower {
+        param(
+            [Parameter(Mandatory = $true)][AllowEmptyCollection()][object[]]$GroupsWithVnetParam,
+            [Parameter(Mandatory = $true)][AllowEmptyCollection()][object[]]$PrivateLinkGroupsParam
+        )
+        $set = @{}
+        foreach ($gsConn in @($GroupsWithVnetParam + $PrivateLinkGroupsParam)) {
+            if ($null -eq $gsConn) { continue }
+            foreach ($vid in @($gsConn.vnetIds)) {
+                if ([string]::IsNullOrWhiteSpace([string]$vid)) { continue }
+                $set[[string]$vid.ToLowerInvariant()] = $true
+            }
+        }
+        return $set
+    }
+
+    function Build-PeeringIndex {
+        param([Parameter(Mandatory = $true)][AllowEmptyCollection()][object[]]$InventorySubsetParam)
+
+        $pairs = @{}
+        $adj = @{} # lower(vnetId) -> hashtable lower(remoteVnetId) -> $true
+        $canonicalByLower = @{} # lower(vnetId) -> first-seen original casing string
+
+        foreach ($r in $InventorySubsetParam) {
+            if ($null -eq $r -or [string]::IsNullOrWhiteSpace([string]$r.id)) { continue }
+            if ([string]$r.type -ine 'microsoft.network/virtualnetworks') { continue }
+
+            $localVnetId = [string]$r.id
+            $localLower = $localVnetId.ToLowerInvariant()
+            if (-not $canonicalByLower.ContainsKey($localLower)) { $canonicalByLower[$localLower] = $localVnetId }
+
+            $remoteVnetIds = Normalize-IdList (Get-OptionalPropertyValue -Obj $r -Name 'topology_vnetPeeringRemoteVnetIds')
+            foreach ($remote in $remoteVnetIds) {
+                if ([string]::IsNullOrWhiteSpace($remote)) { continue }
+
+                $remoteVnetId = [string]$remote
+                $remoteLower = $remoteVnetId.ToLowerInvariant()
+                if (-not $canonicalByLower.ContainsKey($remoteLower)) { $canonicalByLower[$remoteLower] = $remoteVnetId }
+
+                if (-not $adj.ContainsKey($localLower)) { $adj[$localLower] = @{} }
+                if (-not $adj.ContainsKey($remoteLower)) { $adj[$remoteLower] = @{} }
+                $adj[$localLower][$remoteLower] = $true
+                $adj[$remoteLower][$localLower] = $true
+
+                $k = ($localLower -lt $remoteLower) ? ("$localLower|$remoteLower") : ("$remoteLower|$localLower")
+                $pairs[$k] = @($localVnetId, $remoteVnetId)
+            }
+        }
+
+        return @{
+            pairs = $pairs
+            adj = $adj
+            canonicalByLower = $canonicalByLower
         }
     }
 
+    function Build-PeeringOnlyClusters {
+        param(
+            [Parameter(Mandatory = $true)][hashtable]$Adj,
+            [Parameter(Mandatory = $true)][hashtable]$VnetHasNonPeeringLower
+        )
+
+        $membersBySig = @{}
+        $neighborsBySig = @{}
+
+        foreach ($vLower in @($Adj.Keys)) {
+            if ($VnetHasNonPeeringLower.ContainsKey($vLower)) { continue }
+
+            $neighbors = @(
+                $Adj[$vLower].Keys |
+                Where-Object { $_ -ne $vLower } |
+                Sort-Object -Unique
+            )
+            if ($neighbors.Count -lt 1) { continue }
+
+            $sig = ($neighbors -join '|')
+            if (-not $membersBySig.ContainsKey($sig)) {
+                $membersBySig[$sig] = New-Object System.Collections.Generic.List[string]
+                $neighborsBySig[$sig] = @($neighbors)
+            }
+            $membersBySig[$sig].Add($vLower) | Out-Null
+        }
+
+        return @{
+            membersBySig = $membersBySig
+            neighborsBySig = $neighborsBySig
+        }
+    }
+
+    function Ensure-VnetNode {
+        param([Parameter(Mandatory = $true)][string]$VnetId)
+
+        $mid = $mIdVnet[$VnetId]
+        if (-not $mid) {
+            $mid = Get-MermaidId -Map $mIdVnet -Key $VnetId -Prefix 'vnet_' -CounterRef ([ref]$vnetCounter)
+            $vnetName = Get-DisplayNameFromId $VnetId
+            $label = ConvertTo-MermaidSafeLabel ("{0}<br/>Virtual Network" -f $vnetName)
+            $Lines.Add(('  {0}["{1}"]' -f $mid, $label)) | Out-Null
+        }
+        return $mid
+    }
+
+    function Ensure-PeeringGroupNode {
+        param([Parameter(Mandatory = $true)][string]$Signature, [Parameter(Mandatory = $true)][int]$Count)
+
+        $pgMid = Get-MermaidId -Map $mIdVnetPeeringGroup -Key $Signature -Prefix 'vpg_' -CounterRef ([ref]$vnetPeeringGroupCounter)
+        if (-not $emittedVnetPeeringGroupNodes.ContainsKey($pgMid)) {
+            $pgLabel = ConvertTo-MermaidSafeLabel ("Peering VNets (x{0})<br/>Virtual Network" -f $Count)
+            $Lines.Add(('  {0}["{1}"]' -f $pgMid, $pgLabel)) | Out-Null
+            $emittedVnetPeeringGroupNodes[$pgMid] = $true
+        }
+        return $pgMid
+    }
+
+    function Add-PeeringEdgeOnce {
+        param([Parameter(Mandatory = $true)][string]$FromMid, [Parameter(Mandatory = $true)][string]$ToMid, [Parameter(Mandatory = $true)][hashtable]$Emitted)
+        if ($FromMid -eq $ToMid) { return }
+        $eKey = ($FromMid -lt $ToMid) ? ("$FromMid|$ToMid") : ("$ToMid|$FromMid")
+        if (-not $Emitted.ContainsKey($eKey)) {
+            $Lines.Add("  $FromMid ---|peering| $ToMid") | Out-Null
+            $Emitted[$eKey] = $true
+        }
+    }
+
+    $peeringIndex = Build-PeeringIndex -InventorySubsetParam $InventorySubset
+    $peeringPairs = [hashtable]$peeringIndex['pairs']
+    $peerAdj = [hashtable]$peeringIndex['adj']
+    $canonicalVnetIdByLower = [hashtable]$peeringIndex['canonicalByLower']
+
+    $vnetHasNonPeeringConnectionsLower = Get-VnetIdsWithNonPeeringConnectivityLower -GroupsWithVnetParam $groupsWithVnet -PrivateLinkGroupsParam $privateLinkGroups
+    $clusters = Build-PeeringOnlyClusters -Adj $peerAdj -VnetHasNonPeeringLower $vnetHasNonPeeringConnectionsLower
+    $clusterMembersBySignature = [hashtable]$clusters['membersBySig']
+    $clusterNeighborsBySignature = [hashtable]$clusters['neighborsBySig']
+
+    $collapsedVnetToSignature = @{} # memberLower -> signature
+    foreach ($sig in @($clusterMembersBySignature.Keys)) {
+        $members = @($clusterMembersBySignature[$sig] | Sort-Object -Unique)
+        if ($members.Count -ge $PeeringAggregationThreshold) {
+            foreach ($m in $members) { $collapsedVnetToSignature[$m] = $sig }
+        }
+    }
+
+    $emittedPeeringEdges = @{}
+
+    # Emit aggregated nodes and connect them to their neighbor VNets/groups.
+    foreach ($sig in @($clusterMembersBySignature.Keys | Sort-Object)) {
+        $members = @($clusterMembersBySignature[$sig] | Sort-Object -Unique)
+        if ($members.Count -lt $PeeringAggregationThreshold) { continue }
+
+        $pgMid = Ensure-PeeringGroupNode -Signature $sig -Count $members.Count
+        $neighbors = @($clusterNeighborsBySignature[$sig])
+
+        foreach ($nLower in @($neighbors)) {
+            if ([string]::IsNullOrWhiteSpace([string]$nLower)) { continue }
+
+            $targetMid = $null
+            if ($collapsedVnetToSignature.ContainsKey($nLower)) {
+                $targetSig = [string]$collapsedVnetToSignature[$nLower]
+                if ($targetSig -eq $sig) { continue }
+                $targetMembers = @($clusterMembersBySignature[$targetSig] | Sort-Object -Unique)
+                $targetMid = Ensure-PeeringGroupNode -Signature $targetSig -Count $targetMembers.Count
+            }
+            else {
+                $targetVnetId = $canonicalVnetIdByLower.ContainsKey($nLower) ? [string]$canonicalVnetIdByLower[$nLower] : [string]$nLower
+                $targetMid = Ensure-VnetNode -VnetId $targetVnetId
+            }
+
+            Add-PeeringEdgeOnce -FromMid $pgMid -ToMid $targetMid -Emitted $emittedPeeringEdges
+        }
+    }
+
+    # Emit remaining explicit peering edges for VNets that were not collapsed.
     foreach ($pair in $peeringPairs.Values) {
         $left = [string]$pair[0]
         $right = [string]$pair[1]
+        if ([string]::IsNullOrWhiteSpace($left) -or [string]::IsNullOrWhiteSpace($right)) { continue }
 
-        $lmid = $mIdVnet[$left]
-        if (-not $lmid) {
-            $lmid = Get-MermaidId -Map $mIdVnet -Key $left -Prefix 'vnet_' -CounterRef ([ref]$vnetCounter)
-            $vnetName = Get-DisplayNameFromId $left
-            $label = ConvertTo-MermaidSafeLabel ("{0}<br/>Virtual Network" -f $vnetName)
-            $Lines.Add(('  {0}["{1}"]' -f $lmid, $label)) | Out-Null
-        }
+        $lLower = $left.ToLowerInvariant()
+        $rLower = $right.ToLowerInvariant()
+        if ($collapsedVnetToSignature.ContainsKey($lLower) -or $collapsedVnetToSignature.ContainsKey($rLower)) { continue }
 
-        $rmid = $mIdVnet[$right]
-        if (-not $rmid) {
-            $rmid = Get-MermaidId -Map $mIdVnet -Key $right -Prefix 'vnet_' -CounterRef ([ref]$vnetCounter)
-            $vnetName = Get-DisplayNameFromId $right
-            $label = ConvertTo-MermaidSafeLabel ("{0}<br/>Virtual Network" -f $vnetName)
-            $Lines.Add(('  {0}["{1}"]' -f $rmid, $label)) | Out-Null
-        }
-
-        if ($lmid -ne $rmid) {
-            $Lines.Add("  $lmid ---|peering| $rmid") | Out-Null
-        }
+        $lmid = Ensure-VnetNode -VnetId $left
+        $rmid = Ensure-VnetNode -VnetId $right
+        Add-PeeringEdgeOnce -FromMid $lmid -ToMid $rmid -Emitted $emittedPeeringEdges
     }
 
     $groupsWithInternet = @(
@@ -1218,7 +1404,7 @@ if ($OutputMd) {
     $lines.Add("- Edges: $($edges.Count)") | Out-Null
     $lines.Add("") | Out-Null
 
-    if ($MermaidByResourceGroup) {
+    if ($emitMermaidByResourceGroup) {
         $lines.Add('## Mermaid Topology Diagram (By Resource Group)') | Out-Null
         $lines.Add('') | Out-Null
 
@@ -1244,14 +1430,16 @@ if ($OutputMd) {
             $local = Get-GroupSummariesFromInventory -InventorySubset $subset
             $localGroupSummaries = @($local['groupSummaries'])
             $localResourceIdToGroupNodeId = [hashtable]$local['resourceIdToGroupNodeId']
-            $diagramLines = Get-HighLevelMermaidDiagramLines -InventorySubset $subset -GroupSummaries $localGroupSummaries -ResourceIdToGroupNodeId $localResourceIdToGroupNodeId -DiagramTitle ("Resource Group: {0}" -f $rgName)
+            $diagramLines = Get-HighLevelMermaidDiagramLines -InventorySubset $subset -GroupSummaries $localGroupSummaries -ResourceIdToGroupNodeId $localResourceIdToGroupNodeId -DiagramTitle ("Resource Group: {0}" -f $rgName) -PeeringAggregationThreshold $PeeringAggregationThreshold
             foreach ($dl in @($diagramLines)) { $lines.Add([string]$dl) | Out-Null }
         }
     }
     else {
         $lines.Add('## Mermaid Topology Diagram (High-level)') | Out-Null
         $lines.Add('') | Out-Null
-        $diagramLines = Get-HighLevelMermaidDiagramLines -InventorySubset @($inventory) -GroupSummaries @($groupSummaries) -ResourceIdToGroupNodeId $resourceIdToGroupNodeId -DiagramTitle ''
+        $inventorySubsetAll = @($inventory)
+        $groupSummariesAll = $groupSummaries.ToArray()
+        $diagramLines = Get-HighLevelMermaidDiagramLines -InventorySubset $inventorySubsetAll -GroupSummaries $groupSummariesAll -ResourceIdToGroupNodeId $resourceIdToGroupNodeId -DiagramTitle '' -PeeringAggregationThreshold $PeeringAggregationThreshold
         foreach ($dl in $diagramLines) { $lines.Add([string]$dl) | Out-Null }
     }
 

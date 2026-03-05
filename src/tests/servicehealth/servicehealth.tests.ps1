@@ -25,6 +25,18 @@ Describe 'Get-WAFServiceHealth' {
             $ServiceHealthAlert.ActionGroup | Should -Contain 'ag-02'
         }
     }
+
+    Context 'When the ARG query returns null' {
+        BeforeAll {
+            Mock Invoke-WAFQuery { return $null } -module servicehealth -Verifiable
+        }
+
+        It 'Should return an empty array and not throw' {
+            $SubscriptionIds = @('00000000-0000-0000-0000-000000000000')
+            { Get-WAFServiceHealth -SubscriptionIds $SubscriptionIds } | Should -Not -Throw
+            @(Get-WAFServiceHealth -SubscriptionIds $SubscriptionIds).Count | Should -Be 0
+        }
+    }
 }
 
 Describe 'Build-WAFServiceHealthObject' {
@@ -54,6 +66,13 @@ Describe 'Build-WAFServiceHealthObject' {
             $ServiceHealthAlert_CountOfServiceIssues.Count | Should -Be 2
             $ServiceHealthAlert_CountOfSecurityAdvisory.Count | Should -Be 2
             $ServiceHealthAlert_CountOfPlannedMaintenance.Count | Should -Be 2
+        }
+    }
+
+    Context 'When the function is called with a null query result' {
+        It 'Should return an empty array and not throw' {
+            { Build-WAFServiceHealthObject -AdvQueryResult $null } | Should -Not -Throw
+            @(Build-WAFServiceHealthObject -AdvQueryResult $null).Count | Should -Be 0
         }
     }
 }

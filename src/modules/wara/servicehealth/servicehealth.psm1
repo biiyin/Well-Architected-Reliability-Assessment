@@ -47,6 +47,9 @@ function Get-WAFServiceHealth {
 | project subscriptionId, subscriptionName, eventName = name, type, location, resourceGroup, properties"
 
     $queryResults = Invoke-WAFQuery -Query $Servicequery -SubscriptionIds $SubscriptionIds
+    if ($null -eq $queryResults -or @($queryResults).Count -eq 0) {
+        return @()
+    }
 
     $AllServiceHealth = Build-WAFServiceHealthObject -AdvQueryResult $queryResults
     
@@ -80,10 +83,14 @@ function Get-WAFServiceHealth {
 #>
 function Build-WAFServiceHealthObject {
     param (
-        [Parameter(Mandatory = $true)]
+        [Parameter(Mandatory = $false)]
         [AllowEmptyCollection()]
         [PSCustomObject[]] $AdvQueryResult
     )
+
+    if ($null -eq $AdvQueryResult -or @($AdvQueryResult).Count -eq 0) {
+        return @()
+    }
 
     $return = $AdvQueryResult.ForEach({ [ServiceHealthAlert]::new($_) })
 

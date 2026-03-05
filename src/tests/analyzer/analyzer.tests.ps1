@@ -34,7 +34,7 @@ Describe 'WARA Analyzer - offline artifact fallback' {
 
         $jsonObject | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $jsonPath -Encoding utf8
 
-        $script:usedLocalTypes = $false
+        $global:waraUsedLocalTypes = $false
 
         # Prevent the script from trying to install ImportExcel during tests.
         Mock Get-Module { [pscustomobject]@{ Name = 'ImportExcel' } } -ParameterFilter { $Name -eq 'ImportExcel' -and $ListAvailable }
@@ -44,7 +44,7 @@ Describe 'WARA Analyzer - offline artifact fallback' {
         Mock Invoke-RestMethod { throw [System.Net.WebException]::new('offline') } -ParameterFilter { $Uri -eq 'https://azure.github.io/WARA-Build/objects/WARAinScopeResTypes.csv' }
 
         Mock Get-Content {
-            $script:usedLocalTypes = $true
+            $global:waraUsedLocalTypes = $true
 
             # The analyzer expects CSV text when using -Raw.
             return "ResourceType,InAprlAndOrAdvisor`nMicrosoft.Storage/storageAccounts,yes`n"
@@ -55,9 +55,9 @@ Describe 'WARA Analyzer - offline artifact fallback' {
         # Stop after the fallback is exercised (we don't want to execute full Excel generation in unit tests).
         Mock Open-ExcelPackage { throw 'StopTest' }
 
-        # Run in the current scope so mocks apply. The script may trap/throw; ignore the intentional StopTest.
+        # Run the script. The script may trap/throw; ignore the intentional StopTest.
         try {
-            . $script:analyzerScript -JSONFile $jsonPath -ExpertAnalysisFile $script:expertTemplate | Out-Null
+            & $script:analyzerScript -JSONFile $jsonPath -ExpertAnalysisFile $script:expertTemplate | Out-Null
         }
         catch {
             if ($_.Exception.Message -ne 'StopTest') {
@@ -66,6 +66,6 @@ Describe 'WARA Analyzer - offline artifact fallback' {
         }
 
         Assert-MockCalled Invoke-RestMethod -Times 1 -ParameterFilter { $Uri -eq 'https://azure.github.io/WARA-Build/objects/WARAinScopeResTypes.csv' }
-        $script:usedLocalTypes | Should -BeTrue
+        $global:waraUsedLocalTypes | Should -BeTrue
     }
 }

@@ -6,18 +6,15 @@ BeforeAll {
 
 Describe 'Get-AzureRestMethodUriPath' {
     Context 'When to get an Azure REST API URI path' {
-        BeforeEach {
+        It 'Should return the path that does contains resource group' {
             $commonCmdletParams = @{
                 SubscriptionId       = '11111111-1111-1111-1111-111111111111'
+                ResourceGroupName    = 'test-rg'
                 ResourceProviderName = 'Resource.Provider'
                 ResourceType         = 'resourceType'
+                Name                 = 'resource1'
                 ApiVersion           = '0000-00-00'
             }
-        }
-
-        It 'Should return the path that does contains resource group' {
-            $commonCmdletParams.ResourceGroupName = 'test-rg'
-            $commonCmdletParams.Name = 'resource1'
             $result = Get-AzureRestMethodUriPath @commonCmdletParams
 
             $expected = '/subscriptions/11111111-1111-1111-1111-111111111111/resourcegroups/test-rg/providers/Resource.Provider/resourceType/resource1?api-version=0000-00-00'
@@ -26,9 +23,15 @@ Describe 'Get-AzureRestMethodUriPath' {
         }
 
         It 'Should return the path that does contains resource group with query string' {
-            $commonCmdletParams.ResourceGroupName = 'test-rg'
-            $commonCmdletParams.Name = 'resource1'
-            $commonCmdletParams.QueryString = 'test=test'
+            $commonCmdletParams = @{
+                SubscriptionId       = '11111111-1111-1111-1111-111111111111'
+                ResourceGroupName    = 'test-rg'
+                ResourceProviderName = 'Resource.Provider'
+                ResourceType         = 'resourceType'
+                Name                 = 'resource1'
+                ApiVersion           = '0000-00-00'
+                QueryString          = 'test=test'
+            }
             $result = Get-AzureRestMethodUriPath @commonCmdletParams
 
             $expected = '/subscriptions/11111111-1111-1111-1111-111111111111/resourcegroups/test-rg/providers/Resource.Provider/resourceType/resource1?api-version=0000-00-00&test=test'
@@ -37,6 +40,12 @@ Describe 'Get-AzureRestMethodUriPath' {
         }
 
         It 'Should return the path that does not contains resource group' {
+            $commonCmdletParams = @{
+                SubscriptionId       = '11111111-1111-1111-1111-111111111111'
+                ResourceProviderName = 'Resource.Provider'
+                ResourceType         = 'resourceType'
+                ApiVersion           = '0000-00-00'
+            }
             $result = Get-AzureRestMethodUriPath @commonCmdletParams
 
             $expected = '/subscriptions/11111111-1111-1111-1111-111111111111/providers/Resource.Provider/resourceType?api-version=0000-00-00'
@@ -45,7 +54,13 @@ Describe 'Get-AzureRestMethodUriPath' {
         }
 
         It 'Should return the path that does not contains resource group with query string' {
-            $commonCmdletParams.QueryString = 'test=test'
+            $commonCmdletParams = @{
+                SubscriptionId       = '11111111-1111-1111-1111-111111111111'
+                ResourceProviderName = 'Resource.Provider'
+                ResourceType         = 'resourceType'
+                ApiVersion           = '0000-00-00'
+                QueryString          = 'test=test'
+            }
             $result = Get-AzureRestMethodUriPath @commonCmdletParams
 
             $expected = '/subscriptions/11111111-1111-1111-1111-111111111111/providers/Resource.Provider/resourceType?api-version=0000-00-00&test=test'
@@ -65,7 +80,7 @@ Describe 'Invoke-AzureRestApi' {
     }
 
     Context 'When to invoke an Azure REST API with a path WITH resource group' {
-        BeforeEach {
+        It 'Should call Get-AzureRestMethodUriPath and Invoke-AzRestMethod then return the response from the Azure REST API' {
             $commonCmdletParams = @{
                 Method               = 'GET'
                 SubscriptionId       = '11111111-1111-1111-1111-111111111111'
@@ -75,9 +90,6 @@ Describe 'Invoke-AzureRestApi' {
                 Name                 = 'resource1'
                 ApiVersion           = '0000-00-00'
             }
-        }
-
-        It 'Should call Get-AzureRestMethodUriPath and Invoke-AzRestMethod then return the response from the Azure REST API' {
             $result = Invoke-AzureRestApi @commonCmdletParams
 
             Should -InvokeVerifiable
@@ -85,7 +97,16 @@ Describe 'Invoke-AzureRestApi' {
         }
 
         It 'Should call Get-AzureRestMethodUriPath and Invoke-AzRestMethod then return the response from the Azure REST API with query string' {
-            $commonCmdletParams.QueryString = 'test=test'
+            $commonCmdletParams = @{
+                Method               = 'GET'
+                SubscriptionId       = '11111111-1111-1111-1111-111111111111'
+                ResourceGroupName    = 'test-rg'
+                ResourceProviderName = 'Resource.Provider'
+                ResourceType         = 'resourceType'
+                Name                 = 'resource1'
+                ApiVersion           = '0000-00-00'
+                QueryString          = 'test=test'
+            }
             $result = Invoke-AzureRestApi @commonCmdletParams
 
             Should -InvokeVerifiable
@@ -93,7 +114,16 @@ Describe 'Invoke-AzureRestApi' {
         }
 
         It 'Should call Get-AzureRestMethodUriPath and Invoke-AzRestMethod then return the response from the Azure REST API with request body' {
-            $commonCmdletParams.RequestBody = 'test'
+            $commonCmdletParams = @{
+                Method               = 'GET'
+                SubscriptionId       = '11111111-1111-1111-1111-111111111111'
+                ResourceGroupName    = 'test-rg'
+                ResourceProviderName = 'Resource.Provider'
+                ResourceType         = 'resourceType'
+                Name                 = 'resource1'
+                ApiVersion           = '0000-00-00'
+                RequestBody          = 'test'
+            }
             $result = Invoke-AzureRestApi @commonCmdletParams
 
             Should -InvokeVerifiable
@@ -101,8 +131,17 @@ Describe 'Invoke-AzureRestApi' {
         }
 
         It 'Should call Get-AzureRestMethodUriPath and Invoke-AzRestMethod then return the response from the Azure REST API with query string and request body' {
-            $commonCmdletParams.QueryString = 'test=test'
-            $commonCmdletParams.RequestBody = 'test'
+            $commonCmdletParams = @{
+                Method               = 'GET'
+                SubscriptionId       = '11111111-1111-1111-1111-111111111111'
+                ResourceGroupName    = 'test-rg'
+                ResourceProviderName = 'Resource.Provider'
+                ResourceType         = 'resourceType'
+                Name                 = 'resource1'
+                ApiVersion           = '0000-00-00'
+                QueryString          = 'test=test'
+                RequestBody          = 'test'
+            }
             $result = Invoke-AzureRestApi @commonCmdletParams
 
             Should -InvokeVerifiable
@@ -111,7 +150,7 @@ Describe 'Invoke-AzureRestApi' {
     }
 
     Context 'When to invoke an Azure REST API with a path WITHOUT resource group' {
-        BeforeEach {
+        It 'Should call Get-AzureRestMethodUriPath and Invoke-AzRestMethod then return the response from the Azure REST API' {
             $commonCmdletParams = @{
                 Method               = 'GET'
                 SubscriptionId       = '11111111-1111-1111-1111-111111111111'
@@ -119,9 +158,6 @@ Describe 'Invoke-AzureRestApi' {
                 ResourceType         = 'resourceType'
                 ApiVersion           = '0000-00-00'
             }
-        }
-
-        It 'Should call Get-AzureRestMethodUriPath and Invoke-AzRestMethod then return the response from the Azure REST API' {
             $result = Invoke-AzureRestApi @commonCmdletParams
 
             Should -InvokeVerifiable
@@ -129,7 +165,14 @@ Describe 'Invoke-AzureRestApi' {
         }
 
         It 'Should call Get-AzureRestMethodUriPath and Invoke-AzRestMethod then return the response from the Azure REST API with query string' {
-            $commonCmdletParams.QueryString = 'test=test'
+            $commonCmdletParams = @{
+                Method               = 'GET'
+                SubscriptionId       = '11111111-1111-1111-1111-111111111111'
+                ResourceProviderName = 'Resource.Provider'
+                ResourceType         = 'resourceType'
+                ApiVersion           = '0000-00-00'
+                QueryString          = 'test=test'
+            }
             $result = Invoke-AzureRestApi @commonCmdletParams
 
             Should -InvokeVerifiable
@@ -137,7 +180,14 @@ Describe 'Invoke-AzureRestApi' {
         }
 
         It 'Should call Get-AzureRestMethodUriPath and Invoke-AzRestMethod then return the response from the Azure REST API with request body' {
-            $commonCmdletParams.RequestBody = 'test'
+            $commonCmdletParams = @{
+                Method               = 'GET'
+                SubscriptionId       = '11111111-1111-1111-1111-111111111111'
+                ResourceProviderName = 'Resource.Provider'
+                ResourceType         = 'resourceType'
+                ApiVersion           = '0000-00-00'
+                RequestBody          = 'test'
+            }
             $result = Invoke-AzureRestApi @commonCmdletParams
 
             Should -InvokeVerifiable
@@ -145,8 +195,15 @@ Describe 'Invoke-AzureRestApi' {
         }
 
         It 'Should call Get-AzureRestMethodUriPath and Invoke-AzRestMethod then return the response from the Azure REST API with query string and request body' {
-            $commonCmdletParams.QueryString = 'test=test'
-            $commonCmdletParams.RequestBody = 'test'
+            $commonCmdletParams = @{
+                Method               = 'GET'
+                SubscriptionId       = '11111111-1111-1111-1111-111111111111'
+                ResourceProviderName = 'Resource.Provider'
+                ResourceType         = 'resourceType'
+                ApiVersion           = '0000-00-00'
+                QueryString          = 'test=test'
+                RequestBody          = 'test'
+            }
             $result = Invoke-AzureRestApi @commonCmdletParams
 
             Should -InvokeVerifiable
@@ -156,34 +213,31 @@ Describe 'Invoke-AzureRestApi' {
 }
 
 Describe Import-WAFConfigFileData {
-    BeforeEach {
-        $TestConfigFile1 = "$PSScriptRoot/../data/utils/testconfig1.txt"
-
-        $result = Import-WAFConfigFileData $TestConfigFile1
-
-        $expectedTenantId = "12121212-1212-1212-1212-121212121212"
-        $expectedSubscriptionIds = @(
-            "/subscriptions/0000000-0000-0000-0000-000000000000"
-        )
-        $expectedResourceGroups = @(
-            "/subscriptions/1111111-1111-1111-1111-111111111111/resourceGroups/RG-01",
-            "/subscriptions/1111111-1111-1111-1111-111111111111/resourceGroups/RG-02",
-            "/subscriptions/1111111-1111-1111-1111-111111111111/resourceGroups/RG-03",
-            "/subscriptions/1111111-1111-1111-1111-111111111111/resourceGroups/RG-04",
-            "/subscriptions/1111111-1111-1111-1111-111111111111/resourceGroups/RG-05",
-            "/subscriptions/1111111-1111-1111-1111-111111111111/resourceGroups/RG-06",
-            "/subscriptions/1111111-1111-1111-1111-111111111111/resourceGroups/RG-07",
-            "/subscriptions/1111111-1111-1111-1111-111111111111/resourceGroups/RG-08"
-        )
-        $expectedTags = @(
-            "env||environment=~preprod",
-            "app||application!~app1||app2"
-        )
-    }
-
     Context 'Import a WAF config file with valid and invalid data' {
         It 'Should return the correct content of the WAF config file' {
             # Call the function with the test configuration file
+
+            $testConfigFile1 = "$PSScriptRoot/../data/utils/testconfig1.txt"
+            $result = Import-WAFConfigFileData $testConfigFile1
+
+            $expectedTenantId = "12121212-1212-1212-1212-121212121212"
+            $expectedSubscriptionIds = @(
+                "/subscriptions/0000000-0000-0000-0000-000000000000"
+            )
+            $expectedResourceGroups = @(
+                "/subscriptions/1111111-1111-1111-1111-111111111111/resourceGroups/RG-01",
+                "/subscriptions/1111111-1111-1111-1111-111111111111/resourceGroups/RG-02",
+                "/subscriptions/1111111-1111-1111-1111-111111111111/resourceGroups/RG-03",
+                "/subscriptions/1111111-1111-1111-1111-111111111111/resourceGroups/RG-04",
+                "/subscriptions/1111111-1111-1111-1111-111111111111/resourceGroups/RG-05",
+                "/subscriptions/1111111-1111-1111-1111-111111111111/resourceGroups/RG-06",
+                "/subscriptions/1111111-1111-1111-1111-111111111111/resourceGroups/RG-07",
+                "/subscriptions/1111111-1111-1111-1111-111111111111/resourceGroups/RG-08"
+            )
+            $expectedTags = @(
+                "env||environment=~preprod",
+                "app||application!~app1||app2"
+            )
 
             # Validate the results
             $result.tenantid | Should -BeExactly $expectedTenantId
@@ -257,6 +311,209 @@ Describe 'Connect-WAFAzure' {
 
             # Verify that Connect-AzAccount was not called
             Should -Not -InvokeVerifiable
+        }
+    }
+}
+
+Describe 'Invoke-WAFQuery' {
+    Context 'When Query is not provided' {
+        It 'Should project managedBy/sku/plan/zones (and kind) by default' {
+            Mock Get-AzContext {
+                [pscustomobject]@{ Environment = [pscustomobject]@{ Name = 'AzureCloud' } }
+            } -ModuleName utils
+
+            Mock Search-AzGraph {
+                param(
+                    [string] $Query,
+                    [string[]] $Subscription,
+                    [string[]] $ManagementGroup,
+                    [switch] $UseTenantScope,
+                    [switch] $AllowPartialScope,
+                    [int] $First,
+                    [int] $Skip,
+                    [string] $SkipToken,
+                    $DefaultProfile,
+                    $ErrorAction
+                )
+                [pscustomobject]@{ Data = @(); SkipToken = $null }
+            } -ModuleName utils -RemoveParameterValidation @('Subscription', 'ManagementGroup', 'UseTenantScope', 'AllowPartialScope') -Verifiable
+
+            utils\Invoke-WAFQuery -SubscriptionIds @('11111111-1111-1111-1111-111111111111') | Out-Null
+
+            Assert-MockCalled Search-AzGraph -ModuleName utils -Times 1 -ParameterFilter {
+                $Query -match '(?i)\bmanagedBy\b' -and
+                $Query -match '(?i)\bsku\b' -and
+                $Query -match '(?i)hardwareProfile\.vmSize' -and
+                $Query -match '(?i)\bplan\b' -and
+                $Query -match '(?i)\bzones\b' -and
+                $Query -match '(?i)\bkind\b'
+            }
+        }
+
+        It 'Should normalize sku/plan/zones to readable strings' {
+            $sku = utils\Format-WAFKeyValueObjectForDisplay -Value ([pscustomobject]@{ name = 'Standard_B1ls'; tier = 'Standard'; capacity = 2 }) -Multiline -TrailingSemicolon
+            $plan = utils\Format-WAFKeyValueObjectForDisplay -Value ([pscustomobject]@{ name = 'myPlan'; product = 'myProduct' }) -Multiline -TrailingSemicolon
+            $zones = utils\Format-WAFKeyValueObjectForDisplay -Value @('1', '2')
+
+            $sku | Should -Not -Match '^\s*@\{'
+            $sku | Should -Match "(?m)^name=Standard_B1ls;\s*$"
+            $sku | Should -Match "(?m)^tier=Standard;\s*$"
+            $sku | Should -Match "(?m)^capacity=2;\s*$"
+
+            $plan | Should -Not -Match '^\s*@\{'
+            $plan | Should -Match "(?m)^name=myPlan;\s*$"
+
+            $zones | Should -BeExactly '1;2'
+        }
+
+        It 'Should not overflow call depth for self-referencing objects' {
+            $h = @{
+                name = 'root'
+            }
+            $h.self = $h
+
+            { utils\Format-WAFKeyValueObjectForDisplay -Value $h -Multiline -TrailingSemicolon } | Should -Not -Throw
+
+            $s = utils\Format-WAFKeyValueObjectForDisplay -Value $h -Multiline -TrailingSemicolon
+            $s | Should -Match '(?m)^name=root;\s*$'
+            $s | Should -Match '(?m)^self='
+        }
+
+        It 'Should cap depth for deeply nested objects' {
+            $deep = [pscustomobject]@{
+                a = [pscustomobject]@{
+                    b = [pscustomobject]@{
+                        c = [pscustomobject]@{
+                            d = [pscustomobject]@{ e = 'f' }
+                        }
+                    }
+                }
+            }
+
+            { utils\Format-WAFKeyValueObjectForDisplay -Value $deep } | Should -Not -Throw
+            $out = utils\Format-WAFKeyValueObjectForDisplay -Value $deep
+            $out | Should -Match '^a='
+        }
+
+        It 'Should dump a format issue summary when MaxDepth is hit and dump dir is set' {
+            $dumpDir = Join-Path -Path $TestDrive -ChildPath 'formatdump'
+            New-Item -ItemType Directory -Path $dumpDir -Force | Out-Null
+            $env:WARA_DIAGNOSTICS_QUERY_DUMP_DIR = $dumpDir
+
+            $script:lastDumpPath = $null
+            $script:lastDumpValue = $null
+            Mock Set-Content {
+                param(
+                    [string] $LiteralPath,
+                    [string] $Value,
+                    [string] $Encoding
+                )
+                $script:lastDumpPath = $LiteralPath
+                $script:lastDumpValue = $Value
+            } -ModuleName utils -Verifiable
+
+            $v = [pscustomobject]@{ a = 1 }
+            utils\Format-WAFKeyValueObjectForDisplay -Value $v -MaxDepth 0 -ContextFieldName 'sku' -ContextResourceId '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg/providers/Microsoft.X/y/z' | Out-Null
+
+            $script:lastDumpPath | Should -Match 'ARG-FormatIssue-\d{8}-\d{6}-\d{3}-sku\.json$'
+            $script:lastDumpValue | Should -Match '"Reason"\s*:\s*"MaxDepth"'
+            $script:lastDumpValue | Should -Match '"FieldName"\s*:\s*"sku"'
+            Assert-MockCalled Set-Content -ModuleName utils -Times 1
+        }
+
+        It 'Should dump a format issue summary when a cycle is detected and dump dir is set' {
+            $dumpDir = Join-Path -Path $TestDrive -ChildPath 'formatdump2'
+            New-Item -ItemType Directory -Path $dumpDir -Force | Out-Null
+            $env:WARA_DIAGNOSTICS_QUERY_DUMP_DIR = $dumpDir
+
+            $script:lastDumpPath = $null
+            $script:lastDumpValue = $null
+            Mock Set-Content {
+                param(
+                    [string] $LiteralPath,
+                    [string] $Value,
+                    [string] $Encoding
+                )
+                $script:lastDumpPath = $LiteralPath
+                $script:lastDumpValue = $Value
+            } -ModuleName utils -Verifiable
+
+            $h = @{ name = 'root' }
+            $h.self = $h
+
+            utils\Format-WAFKeyValueObjectForDisplay -Value $h -ContextFieldName 'plan' -ContextResourceId '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg/providers/Microsoft.X/y/z' | Out-Null
+
+            $script:lastDumpPath | Should -Match 'ARG-FormatIssue-\d{8}-\d{6}-\d{3}-plan\.json$'
+            $script:lastDumpValue | Should -Match '"Reason"\s*:\s*"CycleDetected"'
+            $script:lastDumpValue | Should -Match '"FieldName"\s*:\s*"plan"'
+            Assert-MockCalled Set-Content -ModuleName utils -Times 1
+        }
+    }
+
+    Context 'When AzureChinaCloud and query uses appserviceresources' {
+        It 'Should rewrite appserviceresources to resources' {
+            Mock Get-AzContext {
+                [pscustomobject]@{ Environment = [pscustomobject]@{ Name = 'AzureChinaCloud' } }
+            } -ModuleName utils
+
+            Mock Search-AzGraph {
+                param(
+                    [string] $Query,
+                    [string[]] $Subscription,
+                    [string[]] $ManagementGroup,
+                    [switch] $UseTenantScope,
+                    [switch] $AllowPartialScope,
+                    [int] $First,
+                    [int] $Skip,
+                    [string] $SkipToken,
+                    $DefaultProfile,
+                    $ErrorAction
+                )
+                [pscustomobject]@{ Data = @(); SkipToken = $null }
+            } -ModuleName utils -RemoveParameterValidation @('Subscription', 'ManagementGroup', 'UseTenantScope', 'AllowPartialScope') -Verifiable
+
+            utils\Invoke-WAFQuery -SubscriptionIds @('11111111-1111-1111-1111-111111111111') -Query 'appserviceresources | project id' | Out-Null
+
+            Assert-MockCalled Search-AzGraph -ModuleName utils -Times 1 -ParameterFilter {
+                $Query -match '(?i)^\s*resources\b' -and
+                $Query -notmatch '(?i)\bappserviceresources\b'
+            }
+        }
+    }
+
+    Context 'When diagnostics query dump dir is set' {
+        It 'Should dump the effective query to a .kql file' {
+            $dumpDir = Join-Path -Path $TestDrive -ChildPath 'dump'
+            New-Item -ItemType Directory -Path $dumpDir -Force | Out-Null
+            $env:WARA_DIAGNOSTICS_QUERY_DUMP_DIR = $dumpDir
+
+            Mock Get-AzContext {
+                [pscustomobject]@{ Environment = [pscustomobject]@{ Name = 'AzureChinaCloud' } }
+            } -ModuleName utils
+
+            $script:lastDumpPath = $null
+            $script:lastDumpValue = $null
+            Mock Set-Content {
+                param(
+                    [string] $LiteralPath,
+                    [string] $Value,
+                    [string] $Encoding,
+                    [switch] $NoNewline
+                )
+                $script:lastDumpPath = $LiteralPath
+                $script:lastDumpValue = $Value
+            } -ModuleName utils -Verifiable
+
+            Mock Search-AzGraph {
+                [pscustomobject]@{ Data = @(); SkipToken = $null }
+            } -ModuleName utils -RemoveParameterValidation @('Subscription', 'ManagementGroup', 'UseTenantScope', 'AllowPartialScope') -Verifiable
+
+            utils\Invoke-WAFQuery -SubscriptionIds @('11111111-1111-1111-1111-111111111111') -Query 'appserviceresources | project id' | Out-Null
+
+            $script:lastDumpPath | Should -Match 'ARG-Query-[0-9a-f]{64}\.kql$'
+            $script:lastDumpValue | Should -Match '(?i)^\s*resources\b'
+            $script:lastDumpValue | Should -Not -Match '(?i)\bappserviceresources\b'
+            Assert-MockCalled Set-Content -ModuleName utils -Times 1
         }
     }
 }

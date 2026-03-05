@@ -74,6 +74,21 @@ Start-WARAReport -ExpertAnalysisFile 'C:\WARA\Expert-Analysis-v1-2025-02-04-11-1
 #You will now have your PowerPoint and Excel reports generated under the C:\WARA directory.
 ```
 
+### Troubleshooting: verify Azure Resource Graph (ARG) queries
+
+If a collector run appears to hang at **Getting All Resources**, you can capture and re-run the exact KQL query that WARA sends to Azure Resource Graph.
+
+- When running via [Invoke-WARAFromConfig.ps1](Invoke-WARAFromConfig.ps1) with `-Diagnostics`, WARA will dump each effective ARG query to `output/ARG-Query-<sha256>.kql`.
+- You can then run that query independently using [tools/Test-WARAResourceGraphQuery.ps1](tools/Test-WARAResourceGraphQuery.ps1):
+
+```powershell
+pwsh -NoProfile -File .\tools\Test-WARAResourceGraphQuery.ps1 \
+  -AzureEnvironment AzureChinaCloud \
+  -TenantId <tenantGuid> \
+  -SubscriptionIds <subGuid1>,<subGuid2> \
+  -QueryPath .\output\ARG-Query-<sha256>.kql
+```
+
 ### Export a deduped network topology (for diagramming)
 
 If your WARA collector output JSON contains `resourceInventory` entries with `topology_*` fields (VNet/Subnet/Public IP/Private Endpoint and Private Link target references), you can generate a simplified topology model that deduplicates resources by **resource type + connected VNet/Subnet**:

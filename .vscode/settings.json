@@ -1,0 +1,5 @@
+{
+  "powershell.scriptAnalysis.settingsPath": ".vscode/PSScriptAnalyzerSettings.psd1",
+
+  "cSpell.enabled": false
+}

@@ -184,6 +184,53 @@ class WorkLoadInvObj {
     [string] $networkConfig
 }
 
+function Convert-TopologyToNetworkConfig {
+    param(
+        [Parameter(Mandatory = $true)]
+        $Resource
+    )
+
+    # Only include keys that have values; keep the output readable (one key per line).
+    $lines = New-Object System.Collections.Generic.List[string]
+
+    $isVnet = ($Resource.type -ieq 'microsoft.network/virtualnetworks')
+
+    $subnetDetailsValue = if ($isVnet) { $Resource.topology_subnetDetails } else { $null }
+
+    $pairs = [ordered]@{
+        vnetIds                  = $Resource.topology_vnetIds
+        subnetIds                = $Resource.topology_subnetIds
+        subnetDetails            = $subnetDetailsValue
+        nicIds                   = $Resource.topology_nicIds
+        privateIps               = $Resource.topology_privateIps
+        publicIpIds              = $Resource.topology_publicIpIds
+        publicIpAddresses        = $Resource.topology_publicIpAddresses
+        publicFqdns              = $Resource.topology_publicFqdns
+        privateEndpointIds       = $Resource.topology_privateEndpointIds
+        privateEndpointSubnetIds = $Resource.topology_privateEndpointSubnetIds
+        privateEndpointVnetIds   = $Resource.topology_privateEndpointVnetIds
+        privateLinkTargetIds     = $Resource.topology_privateLinkTargetIds
+        vnetPeeringRemoteVnetIds = $Resource.topology_vnetPeeringRemoteVnetIds
+        vnetPeeringDetails       = $Resource.topology_vnetPeeringDetails
+        connectedResourceIds     = $Resource.topology_connectedResourceIds
+        publicNetworkAccess      = $Resource.topology_publicNetworkAccess
+    }
+
+    foreach ($k in $pairs.Keys) {
+        $v = [string]$pairs[$k]
+        if (-not [string]::IsNullOrWhiteSpace($v)) {
+            $lines.Add(('{0}={1}' -f $k, $v))
+        }
+    }
+
+    if ($lines.Count -eq 0) {
+        return $null
+    }
+
+    # Excel cells support line breaks; keep it platform-friendly.
+    return ($lines -join [Environment]::NewLine)
+}
+
 # function validate if the required modules are installed
 function Test-Requirement {
     # Install required modules
@@ -1030,49 +1077,6 @@ function Export-WARASupportTicket {
 
 <############################## Workload Inventory #########################################>
 
-function Convert-TopologyToNetworkConfig {
-    param(
-        [Parameter(Mandatory = $true)]
-        $Resource
-    )
-
-    # Only include keys that have values; keep the output readable (one key per line).
-    $lines = New-Object System.Collections.Generic.List[string]
-
-    $pairs = [ordered]@{
-        vnetIds                 = $Resource.topology_vnetIds
-        subnetIds               = $Resource.topology_subnetIds
-        subnetPrefixPairs        = $Resource.topology_subnetPrefixPairs
-        nicIds                  = $Resource.topology_nicIds
-        privateIps              = $Resource.topology_privateIps
-        publicIpIds             = $Resource.topology_publicIpIds
-        publicIpAddresses       = $Resource.topology_publicIpAddresses
-        publicFqdns             = $Resource.topology_publicFqdns
-        privateEndpointIds      = $Resource.topology_privateEndpointIds
-        privateEndpointSubnetIds = $Resource.topology_privateEndpointSubnetIds
-        privateEndpointVnetIds  = $Resource.topology_privateEndpointVnetIds
-        privateLinkTargetIds    = $Resource.topology_privateLinkTargetIds
-        vnetPeeringRemoteVnetIds = $Resource.topology_vnetPeeringRemoteVnetIds
-        vnetPeeringDetails       = $Resource.topology_vnetPeeringDetails
-        connectedResourceIds    = $Resource.topology_connectedResourceIds
-        publicNetworkAccess     = $Resource.topology_publicNetworkAccess
-    }
-
-    foreach ($k in $pairs.Keys) {
-        $v = [string]$pairs[$k]
-        if (-not [string]::IsNullOrWhiteSpace($v)) {
-            $lines.Add(('{0}={1}' -f $k, $v))
-        }
-    }
-
-    if ($lines.Count -eq 0) {
-        return $null
-    }
-
-    # Excel cells support line breaks; keep it platform-friendly.
-    return ($lines -join [Environment]::NewLine)
-}
-
 function Initialize-WARAWorkloadInventory {
     param (
         $InScopeResources,
@@ -1347,10 +1351,10 @@ $NewExpertAnalysisFile = Save-WARAExcelFile -ExcelPackage $ExpertAnalysisTemplat
 $Runtime.Stop()
 $TotalTime = $Runtime.Elapsed.toString('hh\:mm\:ss')
 
-Write-Host '---------------------------------------------------------------------'
-Write-Host ('Execution Complete. Total Runtime was: ') -NoNewline
-Write-Host $TotalTime -NoNewline -ForegroundColor Cyan
-Write-Host (' Minutes')
+    Write-Host '---------------------------------------------------------------------'
+    Write-Host ('Execution Complete. Total Runtime was: ') -NoNewline
+    Write-Host $TotalTime -NoNewline -ForegroundColor Cyan
+    Write-Host (' Minutes')
 Write-Host 'Excel File: ' -NoNewline
 Write-Host $NewExpertAnalysisFile -ForegroundColor Blue
 Write-Host '---------------------------------------------------------------------'

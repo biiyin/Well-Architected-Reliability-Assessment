@@ -1,0 +1,5 @@
+# markdownlintignore
+
+output/**
+coverage.xml
+testResults.xml

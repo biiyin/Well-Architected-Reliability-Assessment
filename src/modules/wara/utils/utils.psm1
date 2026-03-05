@@ -41,8 +41,52 @@ function Invoke-WAFQuery {
         [string[]] $SubscriptionIds,
 
         [Parameter(Mandatory = $false)]
-        [string] $Query = 'resources | project name, type, location, resourceGroup, subscriptionId, id'
+        [string] $Query = @'
+resources
+| extend inventorySku = case(
+    type =~ 'microsoft.compute/virtualmachines', pack('name', tostring(properties.hardwareProfile.vmSize)),
+    isnotnull(sku), sku,
+    isnotnull(properties.sku), properties.sku,
+    dynamic(null)
+)
+| extend inventoryVersion = case(
+    type =~ 'microsoft.containerservice/managedclusters', tostring(properties.currentKubernetesVersion),
+    type =~ 'microsoft.dbformysql/flexibleservers', tostring(properties.version),
+    type =~ 'microsoft.dbforpostgresql/flexibleservers', tostring(properties.version),
+    type =~ 'microsoft.dbformysql/servers', tostring(properties.version),
+    type =~ 'microsoft.dbforpostgresql/servers', tostring(properties.version),
+    type =~ 'microsoft.dbformariadb/servers', tostring(properties.version),
+    type =~ 'microsoft.sql/servers', tostring(properties.version),
+    type =~ 'microsoft.cache/redis', tostring(properties.redisVersion),
+    type =~ 'microsoft.cache/redisenterprise', tostring(properties.redisVersion),
+    type =~ 'microsoft.documentdb/databaseaccounts', tostring(properties.mongoServerVersion),
+    type =~ 'microsoft.hdinsight/clusters', tostring(properties.clusterVersion),
+    type =~ 'microsoft.kusto/clusters', tostring(properties.engineType),
+    type =~ 'microsoft.databricks/workspaces', tostring(properties.parameters.customerManagedKeyVersion),
+    type =~ 'microsoft.elasticsan/elasticsans', tostring(properties.provisioningState),
+    ''
+)
+| project name, type, kind, location, resourceGroup, subscriptionId, id, managedBy, sku = inventorySku, plan, zones, version = inventoryVersion
+'@
     )
+
+    $startedAt = Get-Date
+    $sw = [System.Diagnostics.Stopwatch]::StartNew()
+
+    $queryPreview = $null
+    try {
+        $queryPreview = ($Query -replace '[\r\n\t]+', ' ') -replace '\s{2,}', ' '
+        if ($queryPreview.Length -gt 200) {
+            $queryPreview = $queryPreview.Substring(0, 200) + '...'
+        }
+    }
+    catch {
+        $queryPreview = '<unavailable>'
+    }
+
+    $scopeLabel = if ($SubscriptionIds -and @($SubscriptionIds).Count -gt 0) { 'Subscription' } else { 'Tenant' }
+    $subCount = if ($SubscriptionIds) { @($SubscriptionIds).Count } else { 0 }
+    Write-Verbose ('{0:o} Invoke-WAFQuery start. Scope={1} SubscriptionCount={2} QueryPreview="{3}"' -f $startedAt, $scopeLabel, $subCount, $queryPreview)
 
     function Test-WAFIsAzureChinaCloud {
         try {
@@ -63,23 +107,344 @@ function Invoke-WAFQuery {
         $effectiveQuery = [Regex]::Replace($effectiveQuery, '(?i)\bappserviceresources\b', 'resources')
     }
 
-    $result = $SubscriptionIds ? (Search-AzGraph -Query $effectiveQuery -First 1000 -Subscription $SubscriptionIds -ErrorAction Stop) : (Search-AzGraph -Query $effectiveQuery -First 1000 -UseTenantScope -ErrorAction Stop) # -first 1000 returns the first 1000 results and subsequently reduces the amount of queries required to get data.
-
-    # Collection to store all resources
-    $allResources = @($result)
-
-    # Loop to paginate through the results using the skip token
-    $result = while ($result.SkipToken) {
-        # Retrieve the next set of results using the skip token
-        $result = $SubscriptionIds ? (Search-AzGraph -Query $effectiveQuery -SkipToken $result.SkipToken -Subscription $SubscriptionIds -First 1000 -ErrorAction Stop) : (Search-AzGraph -Query $effectiveQuery -SkipToken $result.SkipToken -First 1000 -UseTenantScope -ErrorAction Stop)
-        # Add the results to the collection
-        Write-Output $result
+    # Diagnostics: optionally dump the exact KQL that will be sent to ARG.
+    # This is helpful when a run appears to hang on a specific query.
+    $queryHash = $null
+    try {
+        $sha256 = [System.Security.Cryptography.SHA256]::Create()
+        $hashBytes = $sha256.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($effectiveQuery))
+        $sha256.Dispose()
+        $queryHash = ($hashBytes | ForEach-Object { $_.ToString('x2') }) -join ''
+    }
+    catch {
+        $queryHash = $null
     }
 
-    $allResources += $result
+    if ($queryHash) {
+        Write-Verbose ("{0:o} Invoke-WAFQuery effective query SHA256={1}" -f (Get-Date), $queryHash)
+    }
 
-    # Output all resources
-    return , $allResources
+    $dumpDir = $env:WARA_DIAGNOSTICS_QUERY_DUMP_DIR
+    if ($dumpDir -and $queryHash) {
+        try {
+            if (-not (Test-Path -LiteralPath $dumpDir -PathType Container)) {
+                New-Item -ItemType Directory -Path $dumpDir -Force | Out-Null
+            }
+
+            if (Test-Path -LiteralPath $dumpDir -PathType Container) {
+                $dumpPath = Join-Path -Path $dumpDir -ChildPath ("ARG-Query-{0}.kql" -f $queryHash)
+                if (-not (Test-Path -LiteralPath $dumpPath -PathType Leaf)) {
+                    Set-Content -LiteralPath $dumpPath -Value $effectiveQuery -Encoding utf8 -NoNewline
+                }
+                Write-Verbose ("{0:o} Invoke-WAFQuery query dumped to: {1}" -f (Get-Date), $dumpPath)
+            }
+            else {
+                Write-Verbose ("{0:o} Invoke-WAFQuery query dump dir does not exist: {1}" -f (Get-Date), $dumpDir)
+            }
+        }
+        catch {
+            Write-Verbose ("{0:o} Invoke-WAFQuery failed to dump query. Error: {1}" -f (Get-Date), $_.Exception.Message)
+        }
+    }
+
+    # Search-AzGraph returns a PSResourceGraphResponse with .Data and .SkipToken.
+    # Always return a flat object[] so downstream code can iterate naturally.
+
+    $page = 1
+    if ($SubscriptionIds -and @($SubscriptionIds).Count -gt 0) {
+        Write-Verbose ("{0:o} Invoke-WAFQuery page {1}: Search-AzGraph -First 1000 -Subscription (count={2})" -f (Get-Date), $page, @($SubscriptionIds).Count)
+        $response = Search-AzGraph -Query $effectiveQuery -First 1000 -Subscription $SubscriptionIds -ErrorAction Stop
+    }
+    else {
+        Write-Verbose ("{0:o} Invoke-WAFQuery page {1}: Search-AzGraph -First 1000 -UseTenantScope" -f (Get-Date), $page)
+        $response = Search-AzGraph -Query $effectiveQuery -First 1000 -UseTenantScope -ErrorAction Stop
+    }
+
+    Write-Verbose ("{0:o} Invoke-WAFQuery page {1}: Search-AzGraph returned. HasData={2} HasSkipToken={3}" -f (Get-Date), $page, ($null -ne $response.Data), ([bool]$response.SkipToken))
+
+    $allResources = @()
+    if ($null -ne $response -and $null -ne $response.Data) {
+        $allResources += @($response.Data)
+    }
+
+    while ($response.SkipToken) {
+        $page++
+        if ($SubscriptionIds -and @($SubscriptionIds).Count -gt 0) {
+            Write-Verbose ("{0:o} Invoke-WAFQuery page {1}: Search-AzGraph -SkipToken <redacted> -First 1000 -Subscription" -f (Get-Date), $page)
+            $response = Search-AzGraph -Query $effectiveQuery -SkipToken $response.SkipToken -Subscription $SubscriptionIds -First 1000 -ErrorAction Stop
+        }
+        else {
+            Write-Verbose ("{0:o} Invoke-WAFQuery page {1}: Search-AzGraph -SkipToken <redacted> -First 1000 -UseTenantScope" -f (Get-Date), $page)
+            $response = Search-AzGraph -Query $effectiveQuery -SkipToken $response.SkipToken -First 1000 -UseTenantScope -ErrorAction Stop
+        }
+
+        Write-Verbose ("{0:o} Invoke-WAFQuery page {1}: Search-AzGraph returned. HasData={2} HasSkipToken={3}" -f (Get-Date), $page, ($null -ne $response.Data), ([bool]$response.SkipToken))
+        if ($null -ne $response -and $null -ne $response.Data) {
+            $allResources += @($response.Data)
+        }
+    }
+
+    Write-Verbose ("{0:o} Invoke-WAFQuery retrieved rows (pre-normalize)={1}" -f (Get-Date), @($allResources).Count)
+
+    # Normalize certain ARG dynamic fields to readable strings for downstream JSON/Excel output.
+    $i = 0
+    foreach ($r in $allResources) {
+        $i++
+        if (($i % 5000) -eq 0) {
+            Write-Verbose ("{0:o} Invoke-WAFQuery normalizing row {1}/{2}" -f (Get-Date), $i, @($allResources).Count)
+        }
+        if ($null -eq $r) { continue }
+
+        if ($r.PSObject.Properties.Name -contains 'sku') {
+            try {
+                $r.sku = Format-WAFKeyValueObjectForDisplay -Value $r.sku -Multiline -TrailingSemicolon -ContextFieldName 'sku' -ContextResourceId ([string]$r.id) -ContextResourceName ([string]$r.name) -ContextResourceType ([string]$r.type)
+            }
+            catch {
+                $rid = [string]$r.id
+                if ([string]::IsNullOrWhiteSpace($rid)) { $rid = '<unknown>' }
+                throw "Failed to normalize field 'sku' for resource id '$rid'. Error: $($_.Exception.Message)"
+            }
+        }
+
+        if ($r.PSObject.Properties.Name -contains 'plan') {
+            try {
+                $r.plan = Format-WAFKeyValueObjectForDisplay -Value $r.plan -Multiline -TrailingSemicolon -ContextFieldName 'plan' -ContextResourceId ([string]$r.id) -ContextResourceName ([string]$r.name) -ContextResourceType ([string]$r.type)
+            }
+            catch {
+                $rid = [string]$r.id
+                if ([string]::IsNullOrWhiteSpace($rid)) { $rid = '<unknown>' }
+                throw "Failed to normalize field 'plan' for resource id '$rid'. Error: $($_.Exception.Message)"
+            }
+        }
+
+        if ($r.PSObject.Properties.Name -contains 'zones') {
+            try {
+                $r.zones = Format-WAFKeyValueObjectForDisplay -Value $r.zones -ContextFieldName 'zones' -ContextResourceId ([string]$r.id) -ContextResourceName ([string]$r.name) -ContextResourceType ([string]$r.type)
+            }
+            catch {
+                $rid = [string]$r.id
+                if ([string]::IsNullOrWhiteSpace($rid)) { $rid = '<unknown>' }
+                throw "Failed to normalize field 'zones' for resource id '$rid'. Error: $($_.Exception.Message)"
+            }
+        }
+    }
+
+    $sw.Stop()
+    Write-Verbose ("{0:o} Invoke-WAFQuery complete. Pages={1} Rows={2} Duration={3}ms" -f (Get-Date), $page, @($allResources).Count, $sw.ElapsedMilliseconds)
+
+    return $allResources
+}
+
+function Format-WAFKeyValueObjectForDisplay {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $false)]
+        [object] $Value,
+
+        [Parameter(Mandatory = $false)]
+        [string[]] $PreferredKeyOrder = @('name', 'tier', 'capacity'),
+
+        [Parameter(Mandatory = $false)]
+        [switch] $Multiline,
+
+        [Parameter(Mandatory = $false)]
+        [switch] $TrailingSemicolon,
+
+        # Guard rails for nested/dynamic objects coming back from ARG:
+        # - Prevent call depth overflow for deeply nested objects
+        # - Prevent infinite recursion for self-referencing objects
+        [Parameter(DontShow)]
+        [int] $MaxDepth = 4,
+
+        [Parameter(DontShow)]
+        [int] $Depth = 0,
+
+        [Parameter(DontShow)]
+        [System.Collections.Generic.HashSet[int]] $Seen = $null
+
+        ,
+        # Optional context for diagnostics (helps identify which resource/field contains unexpected deep/cyclic objects)
+        [Parameter(DontShow)]
+        [string] $ContextFieldName = $null,
+
+        [Parameter(DontShow)]
+        [string] $ContextResourceId = $null
+
+        ,
+        [Parameter(DontShow)]
+        [string] $ContextResourceName = $null,
+
+        [Parameter(DontShow)]
+        [string] $ContextResourceType = $null
+    )
+
+    if ($null -eq $Value) { return $null }
+
+    # Treat value types (DateTime/Guid/TimeSpan/etc.) as scalars.
+    # Recursing into their properties can explode call depth (e.g., DateTime.Date returns DateTime).
+    if ($Value -is [System.ValueType]) {
+        $s = [string]$Value
+        if ([string]::IsNullOrWhiteSpace($s) -or $s -eq 'null') { return $null }
+        return $s
+    }
+
+    if ($null -eq $Seen) {
+        $Seen = [System.Collections.Generic.HashSet[int]]::new()
+    }
+
+    function Write-WAFFormatIssueDump {
+        param(
+            [Parameter(Mandatory = $true)][string] $Reason,
+            [Parameter(Mandatory = $true)][object] $Obj
+        )
+
+        try {
+            $dumpDir = $env:WARA_DIAGNOSTICS_QUERY_DUMP_DIR
+            if ([string]::IsNullOrWhiteSpace($dumpDir)) { return }
+
+            if (-not (Test-Path -LiteralPath $dumpDir -PathType Container)) {
+                New-Item -ItemType Directory -Path $dumpDir -Force | Out-Null
+            }
+            if (-not (Test-Path -LiteralPath $dumpDir -PathType Container)) { return }
+
+            $typeName = $null
+            try { $typeName = $Obj.GetType().FullName } catch { $typeName = '<unknown>' }
+
+            $keys = @()
+            try {
+                if ($Obj -is [System.Collections.IDictionary]) {
+                    $keys = @($Obj.Keys | ForEach-Object { [string]$_ })
+                }
+                else {
+                    $keys = @($Obj.PSObject.Properties | ForEach-Object { $_.Name })
+                }
+            }
+            catch {
+                $keys = @()
+            }
+
+            $payload = [pscustomobject]@{
+                TimestampUtc     = (Get-Date).ToUniversalTime().ToString('o')
+                Reason           = $Reason
+                FieldName        = $ContextFieldName
+                ResourceId       = $ContextResourceId
+                ResourceName     = $ContextResourceName
+                ResourceType     = $ContextResourceType
+                Depth            = $Depth
+                MaxDepth         = $MaxDepth
+                ValueType        = $typeName
+                KeysOrProperties = @($keys | Sort-Object -Unique)
+                ValueString      = [string]$Obj
+            }
+
+            $ts = Get-Date -Format 'yyyyMMdd-HHmmss-fff'
+            $fieldTag = if ([string]::IsNullOrWhiteSpace($ContextFieldName)) { 'unknown' } else { ($ContextFieldName -replace '[^a-zA-Z0-9_-]', '_') }
+            $dumpPath = Join-Path -Path $dumpDir -ChildPath ("ARG-FormatIssue-{0}-{1}.json" -f $ts, $fieldTag)
+            Set-Content -LiteralPath $dumpPath -Value ($payload | ConvertTo-Json -Depth 6) -Encoding utf8
+
+            Write-Verbose ("Format-WAFKeyValueObjectForDisplay: {0}. ResourceId={1} ResourceType={2} Field={3} ValueType={4} Depth={5}/{6}. Dump={7}" -f $Reason, $ContextResourceId, $ContextResourceType, $ContextFieldName, $typeName, $Depth, $MaxDepth, $dumpPath)
+        }
+        catch {
+            # Diagnostics must not break normal execution.
+        }
+    }
+
+    if ($Depth -ge $MaxDepth) {
+        Write-WAFFormatIssueDump -Reason 'MaxDepth' -Obj $Value
+        $fallback = [string]$Value
+        if ([string]::IsNullOrWhiteSpace($fallback) -or $fallback -eq 'null') { return $null }
+        return $fallback
+    }
+
+    if (-not ($Value -is [string]) -and -not ($Value.GetType().IsValueType)) {
+        try {
+            $objId = [System.Runtime.CompilerServices.RuntimeHelpers]::GetHashCode($Value)
+            if ($Seen.Contains($objId)) {
+                Write-WAFFormatIssueDump -Reason 'CycleDetected' -Obj $Value
+                $fallback = [string]$Value
+                if ([string]::IsNullOrWhiteSpace($fallback) -or $fallback -eq 'null') { return $null }
+                return $fallback
+            }
+            $null = $Seen.Add($objId)
+        }
+        catch {
+            # If we can't hash/track, proceed without cycle detection.
+        }
+    }
+
+    if ($Value -is [string]) {
+        $s = [string]$Value
+        if ([string]::IsNullOrWhiteSpace($s) -or $s -eq 'null') { return $null }
+        return $s
+    }
+
+    if ($Value -is [System.Array]) {
+        $items = @($Value) | ForEach-Object {
+            if ($null -eq $_) { return $null }
+            $s = [string]$_
+            if ([string]::IsNullOrWhiteSpace($s) -or $s -eq 'null') { return $null }
+            return $s
+        } | Where-Object { $_ }
+
+        if (@($items).Count -eq 0) { return $null }
+        return ($items -join ';')
+    }
+
+    $pairs = New-Object System.Collections.Generic.List[object]
+
+    $tryAdd = {
+        param([string] $Key, [object] $Obj)
+
+        if ([string]::IsNullOrWhiteSpace($Key)) { return }
+
+        $v = $null
+        if ($Obj -is [System.Collections.IDictionary]) {
+            if ($Obj.Contains($Key)) { $v = $Obj[$Key] }
+        }
+        else {
+            $p = $Obj.PSObject.Properties | Where-Object { $_.Name -ieq $Key } | Select-Object -First 1
+            if ($null -ne $p) { $v = $p.Value }
+        }
+
+        $sv = Format-WAFKeyValueObjectForDisplay -Value $v -PreferredKeyOrder $PreferredKeyOrder -MaxDepth $MaxDepth -Depth ($Depth + 1) -Seen $Seen -ContextFieldName $ContextFieldName -ContextResourceId $ContextResourceId -ContextResourceName $ContextResourceName -ContextResourceType $ContextResourceType
+        if (-not [string]::IsNullOrWhiteSpace($sv)) {
+            $pairs.Add([pscustomobject]@{ k = $Key; v = $sv })
+        }
+    }
+
+    foreach ($k in $PreferredKeyOrder) {
+        & $tryAdd $k $Value
+    }
+
+    $allKeys = @()
+    if ($Value -is [System.Collections.IDictionary]) {
+        $allKeys = @($Value.Keys)
+    }
+    else {
+        $allKeys = @($Value.PSObject.Properties | ForEach-Object { $_.Name })
+    }
+
+    $remaining = $allKeys | Where-Object { $_ -and ($_ -notin $PreferredKeyOrder) } | Sort-Object -Unique
+    foreach ($k in $remaining) {
+        & $tryAdd $k $Value
+    }
+
+    if ($pairs.Count -eq 0) {
+        $fallback = [string]$Value
+        if ([string]::IsNullOrWhiteSpace($fallback) -or $fallback -eq 'null') { return $null }
+        return $fallback
+    }
+
+    $lines = $pairs | ForEach-Object {
+        $suffix = if ($TrailingSemicolon) { ';' } else { '' }
+        ('{0}={1}{2}' -f $_.k, $_.v, $suffix)
+    }
+
+    if ($Multiline) {
+        return ($lines -join "`n")
+    }
+
+    return ($lines -join '; ')
 }
 
 function Add-WAFResourceTopology {
@@ -102,6 +467,7 @@ function Add-WAFResourceTopology {
         'topology_nicIds',
         'topology_subnetIds',
         'topology_subnetPrefixPairs',
+        'topology_subnetDetails',
         'topology_vnetIds',
         'topology_privateIps',
         'topology_publicIpIds',
@@ -121,7 +487,7 @@ function Add-WAFResourceTopology {
         'topology_gatewayType'
     )
 
-    function Normalize-StringList {
+    function ConvertTo-NormalizedStringList {
         param([object] $Value)
 
         if ($null -eq $Value) { return @() }
@@ -147,7 +513,7 @@ function Add-WAFResourceTopology {
 
     function Join-StringList {
         param([object] $Value)
-        $list = Normalize-StringList -Value $Value
+        $list = ConvertTo-NormalizedStringList -Value $Value
         if (@($list).Count -eq 0) { return $null }
         return ($list -join ';')
     }
@@ -230,20 +596,15 @@ function Add-WAFResourceTopology {
             }
         }
 
-        $currentContextSubscriptionId = $null
-        function Ensure-WAFSubscriptionContext {
+        function Set-WAFSubscriptionContext {
             param(
                 [Parameter(Mandatory = $true)][string] $SubscriptionId
             )
 
             if ([string]::IsNullOrWhiteSpace($SubscriptionId)) { return $false }
 
-            $current = Get-Variable -Name currentContextSubscriptionId -Scope 1 -ValueOnly -ErrorAction SilentlyContinue
-            if ($current -eq $SubscriptionId) { return $true }
-
             try {
                 Set-AzContext -SubscriptionId $SubscriptionId -ErrorAction Stop | Out-Null
-                Set-Variable -Name currentContextSubscriptionId -Scope 1 -Value $SubscriptionId
                 return $true
             }
             catch {
@@ -280,24 +641,44 @@ function Add-WAFResourceTopology {
 resources
 | where type =~ 'microsoft.network/virtualnetworks'
 | mv-expand sn = properties.subnets
-| extend subnetId = tostring(sn.id)
 | extend subnetName = tostring(sn.name)
+| extend subnetId = tostring(coalesce(sn.id, strcat(id, '/subnets/', subnetName)))
 | extend subnetPrefix = tostring(coalesce(sn.properties.addressPrefix, sn.properties.addressPrefixes[0]))
+| extend delegations = iif(isnull(sn.properties.delegations), dynamic([dynamic(null)]), sn.properties.delegations)
+| mv-expand del = delegations
+| extend delegationServiceName = tostring(del.properties.serviceName)
 | extend nsgId = tostring(sn.properties.networkSecurityGroup.id)
 | extend routeTableId = tostring(sn.properties.routeTable.id)
-| project vnetId = id, vnetName = name, subscriptionId, resourceGroup, location, subnetId, subnetName, subnetPrefix, nsgId, routeTableId
+| summarize delegationServiceNames = make_set(delegationServiceName) by vnetId = id, vnetName = name, subscriptionId, resourceGroup, location, subnetId, subnetName, subnetPrefix, nsgId, routeTableId
 "@
         $subnets = Invoke-WAFQueryOrEmpty -Query $subnetQuery -FeatureName 'subnets'
         $subnetToVnet = @{}
         $subnetToPrefix = @{}
+        $subnetToName = @{}
+        $subnetToDelegations = @{}
+        $vnetToSubnetIds = @{}
         foreach ($s in @($subnets)) {
             if ($null -eq $s) { continue }
             if ([string]::IsNullOrWhiteSpace([string]$s.subnetId)) { continue }
             $sidLower = ([string]$s.subnetId).ToLowerInvariant()
             $subnetToVnet[$sidLower] = [string]$s.vnetId
+            if (-not [string]::IsNullOrWhiteSpace([string]$s.subnetName)) {
+                $subnetToName[$sidLower] = [string]$s.subnetName
+            }
             if (-not [string]::IsNullOrWhiteSpace([string]$s.subnetPrefix)) {
                 $subnetToPrefix[$sidLower] = [string]$s.subnetPrefix
             }
+
+            $delegations = ConvertTo-NormalizedStringList -Value $s.delegationServiceNames
+            if ($delegations.Count -gt 0) {
+                $subnetToDelegations[$sidLower] = ($delegations -join ',')
+            }
+
+            $vnetLower = ([string]$s.vnetId).ToLowerInvariant()
+            if (-not $vnetToSubnetIds.ContainsKey($vnetLower)) {
+                $vnetToSubnetIds[$vnetLower] = New-Object System.Collections.Generic.List[string]
+            }
+            $vnetToSubnetIds[$vnetLower].Add([string]$s.subnetId)
         }
 
         # VNet Peerings: map local VNet -> remote VNet(s)
@@ -439,7 +820,7 @@ resources
                     $lbFallbackById = @{}
                     foreach ($item in $lbItems) {
                         $subId = [string]$item.subscriptionId
-                        if (-not (Ensure-WAFSubscriptionContext -SubscriptionId $subId)) { continue }
+                        if (-not (Set-WAFSubscriptionContext -SubscriptionId $subId)) { continue }
 
                         $rg = [string]$item.resourceGroup
                         $name = [string]$item.name
@@ -521,7 +902,7 @@ resources
                     $bastionFallbackById = @{}
                     foreach ($item in $bastionItems) {
                         $subId = [string]$item.subscriptionId
-                        if (-not (Ensure-WAFSubscriptionContext -SubscriptionId $subId)) { continue }
+                        if (-not (Set-WAFSubscriptionContext -SubscriptionId $subId)) { continue }
 
                         $rg = [string]$item.resourceGroup
                         $name = [string]$item.name
@@ -597,7 +978,7 @@ resources
                     $agFallbackById = @{}
                     foreach ($item in $agItems) {
                         $subId = [string]$item.subscriptionId
-                        if (-not (Ensure-WAFSubscriptionContext -SubscriptionId $subId)) { continue }
+                        if (-not (Set-WAFSubscriptionContext -SubscriptionId $subId)) { continue }
 
                         $rg = [string]$item.resourceGroup
                         $name = [string]$item.name
@@ -683,7 +1064,7 @@ resources
                     $fwFallbackById = @{}
                     foreach ($item in $fwItems) {
                         $subId = [string]$item.subscriptionId
-                        if (-not (Ensure-WAFSubscriptionContext -SubscriptionId $subId)) { continue }
+                        if (-not (Set-WAFSubscriptionContext -SubscriptionId $subId)) { continue }
 
                         $rg = [string]$item.resourceGroup
                         $name = [string]$item.name
@@ -756,7 +1137,7 @@ resources
                     $vngFallbackById = @{}
                     foreach ($item in $vngItems) {
                         $subId = [string]$item.subscriptionId
-                        if (-not (Ensure-WAFSubscriptionContext -SubscriptionId $subId)) { continue }
+                        if (-not (Set-WAFSubscriptionContext -SubscriptionId $subId)) { continue }
 
                         $rg = [string]$item.resourceGroup
                         $name = [string]$item.name
@@ -812,11 +1193,14 @@ resources
         $natGwQuery = @"
 resources
 | where type =~ 'microsoft.network/natgateways'
-| mv-expand kind=outer sn = properties.subnets to typeof(dynamic)
+    | extend subnets = iif(isnull(properties.subnets), dynamic([dynamic(null)]), properties.subnets)
+    | mv-expand sn = subnets
 | extend subnetId = tostring(sn.id)
-| mv-expand kind=outer pip = properties.publicIpAddresses to typeof(dynamic)
+    | extend publicIpAddresses = iif(isnull(properties.publicIpAddresses), dynamic([dynamic(null)]), properties.publicIpAddresses)
+    | mv-expand pip = publicIpAddresses
 | extend publicIpId = tostring(pip.id)
-| mv-expand kind=outer pfx = properties.publicIpPrefixes to typeof(dynamic)
+    | extend publicIpPrefixes = iif(isnull(properties.publicIpPrefixes), dynamic([dynamic(null)]), properties.publicIpPrefixes)
+    | mv-expand pfx = publicIpPrefixes
 | extend publicIpPrefixId = tostring(pfx.id)
 | summarize subnetIds = make_set(subnetId), publicIpIds = make_set(publicIpId), publicIpPrefixIds = make_set(publicIpPrefixId) by id, name, subscriptionId, resourceGroup, location
 "@
@@ -831,7 +1215,7 @@ resources
                     $natFallbackById = @{}
                     foreach ($item in $natItems) {
                         $subId = [string]$item.subscriptionId
-                        if (-not (Ensure-WAFSubscriptionContext -SubscriptionId $subId)) { continue }
+                        if (-not (Set-WAFSubscriptionContext -SubscriptionId $subId)) { continue }
 
                         $rg = [string]$item.resourceGroup
                         $name = [string]$item.name
@@ -907,7 +1291,7 @@ resources
                     $erFallbackById = @{}
                     foreach ($item in $erItems) {
                         $subId = [string]$item.subscriptionId
-                        if (-not (Ensure-WAFSubscriptionContext -SubscriptionId $subId)) { continue }
+                        if (-not (Set-WAFSubscriptionContext -SubscriptionId $subId)) { continue }
 
                         $rg = [string]$item.resourceGroup
                         $name = [string]$item.name
@@ -967,7 +1351,7 @@ resources
                     $connFallback = New-Object System.Collections.Generic.List[object]
                     foreach ($item in $connItems) {
                         $subId = [string]$item.subscriptionId
-                        if (-not (Ensure-WAFSubscriptionContext -SubscriptionId $subId)) { continue }
+                        if (-not (Set-WAFSubscriptionContext -SubscriptionId $subId)) { continue }
 
                         $rg = [string]$item.resourceGroup
                         $name = [string]$item.name
@@ -1040,26 +1424,41 @@ resources
             if ($null -eq $pe -or [string]::IsNullOrWhiteSpace([string]$pe.id)) { continue }
             $peid = ([string]$pe.id).ToLowerInvariant()
             $peById[$peid] = $pe
-            foreach ($t in (Normalize-StringList -Value $pe.targetIds)) {
+            foreach ($t in (ConvertTo-NormalizedStringList -Value $pe.targetIds)) {
                 $tid = $t.ToLowerInvariant()
                 if (-not $targetToPeIds.ContainsKey($tid)) { $targetToPeIds[$tid] = New-Object System.Collections.Generic.List[string] }
                 $targetToPeIds[$tid].Add([string]$pe.id)
             }
         }
 
-        # PostgreSQL Flexible Server: publicNetworkAccess
+        # PostgreSQL Flexible Server: publicNetworkAccess (+ delegated subnet for VNet integration)
         # Field lives under properties.network.publicNetworkAccess (validated via ARG).
         $pgFlexQuery = @"
 resources
 | where type =~ 'microsoft.dbforpostgresql/flexibleservers'
 | extend publicNetworkAccess = tostring(coalesce(properties.network.publicNetworkAccess, properties.publicNetworkAccess))
-| project id, publicNetworkAccess
+| extend delegatedSubnetId = tostring(coalesce(properties.network.delegatedSubnetResourceId, properties.delegatedSubnetResourceId))
+| project id, publicNetworkAccess, delegatedSubnetId
 "@
         $pgFlexServers = Invoke-WAFQueryOrEmpty -Query $pgFlexQuery -FeatureName 'postgresFlexibleServers'
         $pgFlexById = @{}
         foreach ($p in @($pgFlexServers)) {
             if ($null -eq $p -or [string]::IsNullOrWhiteSpace([string]$p.id)) { continue }
             $pgFlexById[([string]$p.id).ToLowerInvariant()] = $p
+        }
+
+        # MySQL Flexible Server: delegated subnet for VNet integration
+        $mysqlFlexQuery = @"
+resources
+| where type =~ 'microsoft.dbformysql/flexibleservers'
+| extend delegatedSubnetId = tostring(coalesce(properties.network.delegatedSubnetResourceId, properties.delegatedSubnetResourceId))
+| project id, delegatedSubnetId
+"@
+        $mysqlFlexServers = Invoke-WAFQueryOrEmpty -Query $mysqlFlexQuery -FeatureName 'mysqlFlexibleServers'
+        $mysqlFlexById = @{}
+        foreach ($m in @($mysqlFlexServers)) {
+            if ($null -eq $m -or [string]::IsNullOrWhiteSpace([string]$m.id)) { continue }
+            $mysqlFlexById[([string]$m.id).ToLowerInvariant()] = $m
         }
 
         # Azure SQL Servers: publicNetworkAccess
@@ -1090,13 +1489,14 @@ resources
             $storageById[([string]$s.id).ToLowerInvariant()] = $s
         }
 
-        # App Services: VNet integration subnet + publicNetworkAccess
+        # App Services: VNet integration subnet + publicNetworkAccess (+ App Service Plan mapping for SKU backfill)
         $appQuery = @"
 resources
 | where type =~ 'microsoft.web/sites'
 | extend vnetSubnetId = tostring(properties.virtualNetworkSubnetId)
 | extend publicNetworkAccess = tostring(properties.publicNetworkAccess)
-| project id, name, subscriptionId, resourceGroup, location, vnetSubnetId, publicNetworkAccess
+| extend serverFarmId = tostring(properties.serverFarmId)
+| project id, name, subscriptionId, resourceGroup, location, vnetSubnetId, publicNetworkAccess, serverFarmId
 "@
         $apps = Invoke-WAFQueryOrEmpty -Query $appQuery -FeatureName 'appServices'
         $appById = @{}
@@ -1105,15 +1505,48 @@ resources
             $appById[([string]$a.id).ToLowerInvariant()] = $a
         }
 
+        # App Service Plans: SKU (used to backfill sites SKU when missing)
+        $aspQuery = @"
+resources
+| where type =~ 'microsoft.web/serverfarms'
+| project id, sku
+"@
+        $appServicePlans = Invoke-WAFQueryOrEmpty -Query $aspQuery -FeatureName 'appServicePlans'
+        $aspById = @{}
+        foreach ($p in @($appServicePlans)) {
+            if ($null -eq $p -or [string]::IsNullOrWhiteSpace([string]$p.id)) { continue }
+            $aspById[([string]$p.id).ToLowerInvariant()] = $p
+        }
+
         foreach ($r in $ResourceInventory) {
             if ($null -eq $r -or [string]::IsNullOrWhiteSpace([string]$r.id)) { continue }
             $rid = ([string]$r.id).ToLowerInvariant()
             $rtype = [string]$r.type
 
+            # If resource is a VNet, include its subnets in topology_subnetIds (to make networkConfig more useful)
+            if ($rtype -ieq 'microsoft.network/virtualnetworks') {
+                if ($vnetToSubnetIds.ContainsKey($rid)) {
+                    $r.topology_subnetIds = Join-StringList -Value $vnetToSubnetIds[$rid]
+                    $r.topology_vnetIds = Join-StringList -Value @([string]$r.id)
+                }
+            }
+
             # If resource is an App Service
             if ($appById.ContainsKey($rid)) {
                 $a = $appById[$rid]
                 $r.topology_publicNetworkAccess = if ([string]::IsNullOrWhiteSpace([string]$a.publicNetworkAccess)) { $null } else { [string]$a.publicNetworkAccess }
+
+                # Backfill SKU for sites when missing: derive from the associated App Service Plan (serverFarmId)
+                if ([string]::IsNullOrWhiteSpace([string]$r.sku)) {
+                    $sfid = [string]$a.serverFarmId
+                    if (-not [string]::IsNullOrWhiteSpace($sfid)) {
+                        $sfidKey = $sfid.ToLowerInvariant()
+                        if ($aspById.ContainsKey($sfidKey) -and -not [string]::IsNullOrWhiteSpace([string]$aspById[$sfidKey].sku)) {
+                            $r.sku = [string]$aspById[$sfidKey].sku
+                        }
+                    }
+                }
+
                 if (-not [string]::IsNullOrWhiteSpace([string]$a.vnetSubnetId)) {
                     $r.topology_subnetIds = Join-StringList -Value @([string]$a.vnetSubnetId)
                     $vnetId = $subnetToVnet[([string]$a.vnetSubnetId).ToLowerInvariant()]
@@ -1128,6 +1561,36 @@ resources
                 $p = $pgFlexById[$rid]
                 if ([string]::IsNullOrWhiteSpace([string]$r.topology_publicNetworkAccess)) {
                     $r.topology_publicNetworkAccess = if ([string]::IsNullOrWhiteSpace([string]$p.publicNetworkAccess)) { $null } else { [string]$p.publicNetworkAccess }
+                }
+
+                # VNet integration (delegated subnet)
+                $ds = [string]$p.delegatedSubnetId
+                if (-not [string]::IsNullOrWhiteSpace($ds)) {
+                    $existing = Split-StringList -Value $r.topology_subnetIds
+                    $merged = @($existing + @($ds))
+                    $r.topology_subnetIds = Join-StringList -Value $merged
+
+                    $vnetId = $subnetToVnet[$ds.ToLowerInvariant()]
+                    if (-not [string]::IsNullOrWhiteSpace($vnetId)) {
+                        $existingV = Split-StringList -Value $r.topology_vnetIds
+                        $r.topology_vnetIds = Join-StringList -Value @($existingV + @($vnetId))
+                    }
+                }
+            }
+
+            # If resource is a MySQL Flexible Server (VNet integration delegated subnet)
+            if ($rtype -ieq 'microsoft.dbformysql/flexibleservers' -and $mysqlFlexById.ContainsKey($rid)) {
+                $m = $mysqlFlexById[$rid]
+                $ds = [string]$m.delegatedSubnetId
+                if (-not [string]::IsNullOrWhiteSpace($ds)) {
+                    $existing = Split-StringList -Value $r.topology_subnetIds
+                    $r.topology_subnetIds = Join-StringList -Value @($existing + @($ds))
+
+                    $vnetId = $subnetToVnet[$ds.ToLowerInvariant()]
+                    if (-not [string]::IsNullOrWhiteSpace($vnetId)) {
+                        $existingV = Split-StringList -Value $r.topology_vnetIds
+                        $r.topology_vnetIds = Join-StringList -Value @($existingV + @($vnetId))
+                    }
                 }
             }
 
@@ -1150,9 +1613,9 @@ resources
             # If resource is a NIC
             if ($rtype -ieq 'microsoft.network/networkinterfaces' -and $nicById.ContainsKey($rid)) {
                 $n = $nicById[$rid]
-                $subnetIds = Normalize-StringList -Value $n.subnetIds
-                $publicIpResourceIds = Normalize-StringList -Value $n.publicIpIds
-                $privateIps = Normalize-StringList -Value $n.privateIps
+                $subnetIds = ConvertTo-NormalizedStringList -Value $n.subnetIds
+                $publicIpResourceIds = ConvertTo-NormalizedStringList -Value $n.publicIpIds
+                $privateIps = ConvertTo-NormalizedStringList -Value $n.privateIps
 
                 $r.topology_subnetIds = Join-StringList -Value $subnetIds
                 $r.topology_privateIps = Join-StringList -Value $privateIps
@@ -1186,7 +1649,7 @@ resources
 
             # If resource is a VM, derive networking via NICs
             if ($rtype -ieq 'microsoft.compute/virtualmachines' -and $vmToNicIds.ContainsKey($rid)) {
-                $nicIds = Normalize-StringList -Value $vmToNicIds[$rid]
+                $nicIds = ConvertTo-NormalizedStringList -Value $vmToNicIds[$rid]
                 $r.topology_nicIds = Join-StringList -Value $nicIds
 
                 $subnetIds = @()
@@ -1195,9 +1658,9 @@ resources
                 foreach ($nid in $nicIds) {
                     $n = $nicById[$nid.ToLowerInvariant()]
                     if ($null -eq $n) { continue }
-                    $subnetIds += Normalize-StringList -Value $n.subnetIds
-                    $publicIpResourceIds += Normalize-StringList -Value $n.publicIpIds
-                    $privateIps += Normalize-StringList -Value $n.privateIps
+                    $subnetIds += ConvertTo-NormalizedStringList -Value $n.subnetIds
+                    $publicIpResourceIds += ConvertTo-NormalizedStringList -Value $n.publicIpIds
+                    $privateIps += ConvertTo-NormalizedStringList -Value $n.privateIps
                 }
 
                 $r.topology_subnetIds = Join-StringList -Value $subnetIds
@@ -1205,7 +1668,7 @@ resources
                 $r.topology_publicIpIds = Join-StringList -Value $publicIpResourceIds
 
                 $vnetIds = @()
-                foreach ($sid in (Normalize-StringList -Value $subnetIds)) {
+                foreach ($sid in (ConvertTo-NormalizedStringList -Value $subnetIds)) {
                     $v = $subnetToVnet[$sid.ToLowerInvariant()]
                     if (-not [string]::IsNullOrWhiteSpace($v)) { $vnetIds += $v }
                 }
@@ -1213,7 +1676,7 @@ resources
 
                 $pipAddresses = @()
                 $pipFqdns = @()
-                (Normalize-StringList -Value $publicIpResourceIds) | ForEach-Object {
+                (ConvertTo-NormalizedStringList -Value $publicIpResourceIds) | ForEach-Object {
                     $publicIpResourceId0 = [string]$_
                     if ([string]::IsNullOrWhiteSpace($publicIpResourceId0)) { return }
                     $p = $pipById[$publicIpResourceId0.ToLowerInvariant()]
@@ -1230,26 +1693,26 @@ resources
                 param([object] $IpConfigIds)
 
                 $nicIds = @()
-                foreach ($ipconfId in (Normalize-StringList -Value $IpConfigIds)) {
+                foreach ($ipconfId in (ConvertTo-NormalizedStringList -Value $IpConfigIds)) {
                     if ([string]::IsNullOrWhiteSpace([string]$ipconfId)) { continue }
                     $m = [regex]::Match([string]$ipconfId, '(?i)(.*/providers/Microsoft\.Network/networkInterfaces/[^/]+)')
                     if ($m.Success) {
                         $nicIds += [string]$m.Groups[1].Value
                     }
                 }
-                return @(Normalize-StringList -Value $nicIds)
+                return @(ConvertTo-NormalizedStringList -Value $nicIds)
             }
 
             function Get-VmIdsFromNicIds {
                 param([string[]] $NicIds)
                 $vmIds = @()
-                foreach ($nid2 in (Normalize-StringList -Value $NicIds)) {
+                foreach ($nid2 in (ConvertTo-NormalizedStringList -Value $NicIds)) {
                     $n2 = $nicById[$nid2.ToLowerInvariant()]
                     if ($null -ne $n2 -and -not [string]::IsNullOrWhiteSpace([string]$n2.vmId)) {
                         $vmIds += [string]$n2.vmId
                     }
                 }
-                return @(Normalize-StringList -Value $vmIds)
+                return @(ConvertTo-NormalizedStringList -Value $vmIds)
             }
 
             function Set-NetworkFromSubnetsAndPips {
@@ -1260,9 +1723,9 @@ resources
                     [object] $PrivateIps
                 )
 
-                $subnetIds2 = Normalize-StringList -Value $SubnetIds
-                $publicIpIds2 = Normalize-StringList -Value $PublicIpIds
-                $privateIps2 = Normalize-StringList -Value $PrivateIps
+                $subnetIds2 = ConvertTo-NormalizedStringList -Value $SubnetIds
+                $publicIpIds2 = ConvertTo-NormalizedStringList -Value $PublicIpIds
+                $privateIps2 = ConvertTo-NormalizedStringList -Value $PrivateIps
 
                 if ($subnetIds2.Count -gt 0) { $Resource.topology_subnetIds = Join-StringList -Value $subnetIds2 }
                 if ($publicIpIds2.Count -gt 0) { $Resource.topology_publicIpIds = Join-StringList -Value $publicIpIds2 }
@@ -1355,7 +1818,7 @@ resources
             if ($rtype -ieq 'microsoft.network/natgateways' -and $natGwById.ContainsKey($rid)) {
                 $ng = $natGwById[$rid]
                 Set-NetworkFromSubnetsAndPips -Resource $r -SubnetIds $ng.subnetIds -PublicIpIds $ng.publicIpIds -PrivateIps @()
-                $pfxIds = Normalize-StringList -Value $ng.publicIpPrefixIds
+                $pfxIds = ConvertTo-NormalizedStringList -Value $ng.publicIpPrefixIds
                 if ($pfxIds.Count -gt 0) {
                     $r.topology_publicIpPrefixIds = Join-StringList -Value $pfxIds
                 }
@@ -1372,8 +1835,8 @@ resources
             # If resource is a Private Endpoint
             if ($rtype -ieq 'microsoft.network/privateendpoints' -and $peById.ContainsKey($rid)) {
                 $pe = $peById[$rid]
-                $peSubnetIds = Normalize-StringList -Value $pe.subnetIds
-                $peTargetIds = Normalize-StringList -Value $pe.targetIds
+                $peSubnetIds = ConvertTo-NormalizedStringList -Value $pe.subnetIds
+                $peTargetIds = ConvertTo-NormalizedStringList -Value $pe.targetIds
 
                 $r.topology_subnetIds = Join-StringList -Value $peSubnetIds
                 $r.topology_privateLinkTargetIds = Join-StringList -Value $peTargetIds
@@ -1389,7 +1852,7 @@ resources
 
             # If resource is a Private Link target (reverse mapping)
             if ($targetToPeIds.ContainsKey($rid)) {
-                $privateEndpointIdsList = Normalize-StringList -Value $targetToPeIds[$rid]
+                $privateEndpointIdsList = ConvertTo-NormalizedStringList -Value $targetToPeIds[$rid]
                 $r.topology_privateEndpointIds = Join-StringList -Value $privateEndpointIdsList
 
                 $peSubnetIds = @()
@@ -1399,9 +1862,9 @@ resources
                     if ([string]::IsNullOrWhiteSpace($peId0)) { return }
                     $pe = $peById[$peId0.ToLowerInvariant()]
                     if ($null -eq $pe) { return }
-                    $peSubnetIds += Normalize-StringList -Value $pe.subnetIds
+                    $peSubnetIds += ConvertTo-NormalizedStringList -Value $pe.subnetIds
                 }
-                foreach ($sid in (Normalize-StringList -Value $peSubnetIds)) {
+                foreach ($sid in (ConvertTo-NormalizedStringList -Value $peSubnetIds)) {
                     $v = $subnetToVnet[$sid.ToLowerInvariant()]
                     if (-not [string]::IsNullOrWhiteSpace($v)) { $peVnetIds += $v }
                 }
@@ -1445,6 +1908,42 @@ resources
             }
 
             $r.topology_subnetPrefixPairs = Join-StringList -Value $pairs
+        }
+
+        # Subnet details (offline-friendly): subnetId|subnetName|cidr|delegations
+        # Requirement: only VNets need detailed subnet metadata. Resources that merely reference a subnet
+        # (e.g., MySQL/PostgreSQL Flexible Servers) only need subnet IDs.
+        foreach ($r in $ResourceInventory) {
+            if ($null -eq $r) { continue }
+
+            if ($r.type -ine 'microsoft.network/virtualnetworks') {
+                $r.topology_subnetDetails = $null
+                continue
+            }
+
+            $subnetIdsForResource = @(
+                (Split-StringList -Value $r.topology_subnetIds) +
+                (Split-StringList -Value $r.topology_privateEndpointSubnetIds)
+            ) | Sort-Object -Unique
+
+            if ($subnetIdsForResource.Count -eq 0) {
+                $r.topology_subnetDetails = $null
+                continue
+            }
+
+            $details = @()
+            foreach ($sid in $subnetIdsForResource) {
+                if ([string]::IsNullOrWhiteSpace([string]$sid)) { continue }
+                $sidLower = ([string]$sid).ToLowerInvariant()
+
+                $name = $subnetToName[$sidLower]
+                $cidr = $subnetToPrefix[$sidLower]
+                $delegations = $subnetToDelegations[$sidLower]
+
+                $details += ("{0}|{1}|{2}|{3}" -f [string]$sid, [string]$name, [string]$cidr, [string]$delegations)
+            }
+
+            $r.topology_subnetDetails = Join-StringList -Value $details
         }
     }
     catch {

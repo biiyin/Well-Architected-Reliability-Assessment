@@ -1,0 +1,165 @@
+{
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": {
+      "type": "string"
+    },
+    "vnetName": {
+      "type": "string"
+    },
+    "vnetAddressPrefix": {
+      "type": "string",
+      "defaultValue": "10.50.0.0/16"
+    },
+    "subnetName": {
+      "type": "string",
+      "defaultValue": "snet-mysql"
+    },
+    "subnetPrefix": {
+      "type": "string",
+      "defaultValue": "10.50.1.0/24"
+    },
+    "privateDnsZoneName": {
+      "type": "string"
+    },
+    "vnetLinkName": {
+      "type": "string",
+      "defaultValue": "mysql-zone-link"
+    },
+    "mysqlServerName": {
+      "type": "string"
+    },
+    "administratorLogin": {
+      "type": "string"
+    },
+    "administratorLoginPassword": {
+      "type": "secureString"
+    },
+    "skuName": {
+      "type": "string",
+      "defaultValue": "Standard_D2ds_v4"
+    },
+    "mysqlVersion": {
+      "type": "string",
+      "defaultValue": "8.0.21"
+    },
+    "storageSizeGB": {
+      "type": "int",
+      "defaultValue": 20
+    },
+    "publicNetworkAccess": {
+      "type": "string",
+      "defaultValue": "Disabled",
+      "allowedValues": [
+        "Enabled",
+        "Disabled"
+      ]
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Network/virtualNetworks",
+      "apiVersion": "2023-09-01",
+      "name": "[parameters('vnetName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "addressSpace": {
+          "addressPrefixes": [
+            "[parameters('vnetAddressPrefix')]"
+          ]
+        },
+        "subnets": [
+          {
+            "name": "[parameters('subnetName')]",
+            "properties": {
+              "addressPrefix": "[parameters('subnetPrefix')]",
+              "delegations": [
+                {
+                  "name": "mysqlDelegation",
+                  "properties": {
+                    "serviceName": "Microsoft.DBforMySQL/flexibleServers"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Network/privateDnsZones",
+      "apiVersion": "2020-06-01",
+      "name": "[parameters('privateDnsZoneName')]",
+      "location": "global",
+      "properties": {}
+    },
+    {
+      "type": "Microsoft.Network/privateDnsZones/virtualNetworkLinks",
+      "apiVersion": "2020-06-01",
+      "name": "[format('{0}/{1}', parameters('privateDnsZoneName'), parameters('vnetLinkName'))]",
+      "location": "global",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/privateDnsZones', parameters('privateDnsZoneName'))]",
+        "[resourceId('Microsoft.Network/virtualNetworks', parameters('vnetName'))]"
+      ],
+      "properties": {
+        "virtualNetwork": {
+          "id": "[resourceId('Microsoft.Network/virtualNetworks', parameters('vnetName'))]"
+        },
+        "registrationEnabled": false
+      }
+    },
+    {
+      "type": "Microsoft.DBforMySQL/flexibleServers",
+      "apiVersion": "2023-06-30",
+      "name": "[parameters('mysqlServerName')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/virtualNetworks', parameters('vnetName'))]",
+        "[resourceId('Microsoft.Network/privateDnsZones/virtualNetworkLinks', parameters('privateDnsZoneName'), parameters('vnetLinkName'))]"
+      ],
+      "sku": {
+        "name": "[parameters('skuName')]",
+        "tier": "GeneralPurpose"
+      },
+      "properties": {
+        "administratorLogin": "[parameters('administratorLogin')]",
+        "administratorLoginPassword": "[parameters('administratorLoginPassword')]",
+        "version": "[parameters('mysqlVersion')]",
+        "storage": {
+          "storageSizeGB": "[parameters('storageSizeGB')]"
+        },
+        "backup": {
+          "backupRetentionDays": 7,
+          "geoRedundantBackup": "Disabled"
+        },
+        "highAvailability": {
+          "mode": "Disabled"
+        },
+        "network": {
+          "delegatedSubnetResourceId": "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('vnetName'), parameters('subnetName'))]",
+          "privateDnsZoneArmResourceId": "[resourceId('Microsoft.Network/privateDnsZones', parameters('privateDnsZoneName'))]"
+        },
+        "publicNetworkAccess": "[parameters('publicNetworkAccess')]"
+      }
+    }
+  ],
+  "outputs": {
+    "vnetId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Network/virtualNetworks', parameters('vnetName'))]"
+    },
+    "subnetId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('vnetName'), parameters('subnetName'))]"
+    },
+    "mysqlServerId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.DBforMySQL/flexibleServers', parameters('mysqlServerName'))]"
+    },
+    "privateDnsZoneId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Network/privateDnsZones', parameters('privateDnsZoneName'))]"
+    }
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug WARA (Invoke-WARAFromConfig)",
+      "type": "PowerShell",
+      "request": "launch",
+      "script": "${workspaceFolder}/Invoke-WARAFromConfig.ps1",
+      "cwd": "${workspaceFolder}",
+      "args": [
+        "-Diagnostics"
+      ],
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen"
+    },
+    {
+      "name": "Debug ARG Query Tool (Test-WARAResourceGraphQuery)",
+      "type": "PowerShell",
+      "request": "launch",
+      "script": "${workspaceFolder}/tools/Test-WARAResourceGraphQuery.ps1",
+      "cwd": "${workspaceFolder}",
+      "args": [
+        "-QueryFile",
+        "${workspaceFolder}/output/ARG-Query-REPLACE_WITH_HASH.kql"
+      ],
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen"
+    }
+  ]
+}
