@@ -62,8 +62,6 @@ resources
     type =~ 'microsoft.documentdb/databaseaccounts', tostring(properties.mongoServerVersion),
     type =~ 'microsoft.hdinsight/clusters', tostring(properties.clusterVersion),
     type =~ 'microsoft.kusto/clusters', tostring(properties.engineType),
-    type =~ 'microsoft.databricks/workspaces', tostring(properties.parameters.customerManagedKeyVersion),
-    type =~ 'microsoft.elasticsan/elasticsans', tostring(properties.provisioningState),
     ''
 )
 | project name, type, kind, location, resourceGroup, subscriptionId, id, managedBy, sku = inventorySku, plan, zones, version = inventoryVersion

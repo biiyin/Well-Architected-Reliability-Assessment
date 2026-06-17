@@ -179,6 +179,7 @@ class WorkLoadInvObj {
     [string] $sku
     [string] $plan
     [string] $zones
+    [string] $version
 
     # Consolidated, best-effort network topology info (JSON string)
     [string] $networkConfig
@@ -1104,6 +1105,7 @@ function Initialize-WARAWorkloadInventory {
             $ResourceObj.sku = [string]$resource.sku
             $ResourceObj.plan = $resource.plan
             $ResourceObj.zones = [string]$resource.zones
+            $ResourceObj.version = [string]$resource.version
 
             $ResourceObj.networkConfig = Convert-TopologyToNetworkConfig -Resource $resource
 
@@ -1138,6 +1140,7 @@ function Export-WARAWorkloadInventory {
     $InScopeSheet.Add('sku')
     $InScopeSheet.Add('plan')
     $InScopeSheet.Add('zones')
+    $InScopeSheet.Add('version')
 
     $InScopeSheet.Add('networkConfig')
 

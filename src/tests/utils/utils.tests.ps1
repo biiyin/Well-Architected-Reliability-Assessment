@@ -346,7 +346,9 @@ Describe 'Invoke-WAFQuery' {
                 $Query -match '(?i)hardwareProfile\.vmSize' -and
                 $Query -match '(?i)\bplan\b' -and
                 $Query -match '(?i)\bzones\b' -and
-                $Query -match '(?i)\bkind\b'
+                $Query -match '(?i)\bkind\b' -and
+                $Query -match '(?i)\bversion\b' -and
+                $Query -match '(?i)inventoryVersion'
             }
         }
 
